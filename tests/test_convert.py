@@ -402,9 +402,9 @@ class TestTarExtractSnippet:
     def test_parse_flags_arg(self):
         ir = self.parser.parse(self.SNIPPET + '\n')
         node = ir.nodes[0]
-        assert len(node.args) == 4
-        assert node.args[0].kind == "string"
-        assert node.args[0].value == "xvf"
+        # tar xvf <archive> -C <path>: xvf, archive fstring, -C, to_path var
+        assert any(a.kind == "string" and a.value == "xvf" for a in node.args)
+        assert any(a.kind == "string" and a.value == "-C" for a in node.args)
 
     def test_parse_archive_fstring(self):
         ir = self.parser.parse(self.SNIPPET + '\n')

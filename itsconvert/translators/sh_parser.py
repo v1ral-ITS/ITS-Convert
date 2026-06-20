@@ -206,7 +206,11 @@ class BashParser(Parser):
         return Command(command=line, args=[], capture=False, name=None)
 
     def _split_command_line(self, line: str) -> list[str]:
-        """Split a bash command line into tokens, respecting single and double quotes."""
+        """Split a bash command line into tokens, respecting single and double quotes.
+
+        Note: escape sequences (e.g. \\" inside double quotes) and ANSI-C quoting
+        ($'...') are not handled; this parser uses simple heuristics.
+        """
         tokens: list[str] = []
         current: list[str] = []
         in_single = False
@@ -252,6 +256,10 @@ class BashParser(Parser):
             if pos < len(word):
                 parts.append(Value(kind="string", value=word[pos:]))
             return Value(kind="fstring", parts=parts)
-        # Plain literal — strip surrounding quotes if present
-        stripped = word.strip('"').strip("'")
+        # Plain literal — strip one matching pair of surrounding quotes if present
+        if (word.startswith('"') and word.endswith('"') and len(word) >= 2) or \
+           (word.startswith("'") and word.endswith("'") and len(word) >= 2):
+            stripped = word[1:-1]
+        else:
+            stripped = word
         return Value(kind="string", value=stripped)
