@@ -11,6 +11,7 @@ BinaryOp = Literal["+", "-", "*", "/", "//", "%", "**", "&", "|", "^", "<<", ">>
 UnaryOp = Literal["-", "not", "~"]
 StringOp = Literal["concat", "format", "split", "join", "replace", "strip", "upper", "lower", "len", "contains", "startswith", "endswith"]
 FileOp = Literal["read", "write", "append", "exists", "delete", "mkdir", "listdir", "basename", "dirname", "copy", "move"]
+BoolOp = Literal["and", "or"]
 
 
 class Value(BaseModel):
@@ -23,6 +24,16 @@ class Condition(BaseModel):
     left: Value
     op: CompareOp
     right: Value
+
+
+class CompoundCondition(BaseModel):
+    """Compound boolean condition: `left and/or right` where each side can be a Condition or another CompoundCondition."""
+    left: "ConditionExpr"
+    op: BoolOp
+    right: "ConditionExpr"
+
+
+ConditionExpr = Union[Condition, CompoundCondition]
 
 
 class Node(BaseModel):
@@ -81,14 +92,14 @@ class Exit(Node):
 
 class If(Node):
     type: Literal["if"] = "if"
-    condition: Condition
+    condition: ConditionExpr
     then_body: list["IRNode"] = Field(default_factory=list)
     elif_branches: list["ElifBranch"] = Field(default_factory=list)
     else_body: list["IRNode"] = Field(default_factory=list)
 
 
 class ElifBranch(BaseModel):
-    condition: Condition
+    condition: ConditionExpr
     body: list["IRNode"] = Field(default_factory=list)
 
 
@@ -125,7 +136,7 @@ class ForKeys(Node):
 
 class While(Node):
     type: Literal["while"] = "while"
-    condition: Condition
+    condition: ConditionExpr
     body: list["IRNode"] = Field(default_factory=list)
 
 
@@ -236,7 +247,7 @@ class DictOp(Node):
 
 class Assert(Node):
     type: Literal["assert"] = "assert"
-    condition: Condition
+    condition: ConditionExpr
     message: Value | None = None
 
 
@@ -246,12 +257,58 @@ class RawBlock(Node):
     code: str
 
 
+class SwitchCase(BaseModel):
+    """One case/when arm in a Switch/Match node."""
+    pattern: Value
+    body: list["IRNode"] = Field(default_factory=list)
+
+
+class Switch(Node):
+    """Switch/match statement: switch subject { case p: ... default: ... }"""
+    type: Literal["switch"] = "switch"
+    subject: Value
+    cases: list[SwitchCase] = Field(default_factory=list)
+    default_body: list["IRNode"] = Field(default_factory=list)
+
+
+class ClassField(BaseModel):
+    name: str
+    value: Value | None = None
+    type_hint: str | None = None
+
+
+class ClassDef(Node):
+    """Class definition with fields and methods."""
+    type: Literal["class_def"] = "class_def"
+    name: str
+    bases: list[str] = Field(default_factory=list)
+    fields: list[ClassField] = Field(default_factory=list)
+    methods: list[FunctionDef] = Field(default_factory=list)
+
+
+class Lambda(Node):
+    """Anonymous function / lambda expression stored as a variable assignment."""
+    type: Literal["lambda"] = "lambda"
+    name: str | None = None  # variable name the lambda is bound to
+    params: list[Param] = Field(default_factory=list)
+    body: Value  # single-expression body
+
+
+class WithBlock(Node):
+    """Context manager / resource acquisition: `with expr as var:`."""
+    type: Literal["with_block"] = "with_block"
+    expr: Value
+    var: str | None = None
+    body: list["IRNode"] = Field(default_factory=list)
+
+
 IRNode = Union[
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
     If, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass,
     FunctionDef, Return, Import, StringOpNode, FileIONode, EnvVar, Argv,
     TryCatch, Raise, ListOp, DictOp, Assert, RawBlock,
+    Switch, ClassDef, Lambda, WithBlock,
 ]
 
 
@@ -259,3 +316,5 @@ class ScriptIR(BaseModel):
     source_language: Language
     nodes: list[IRNode] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    """Parser confidence (0.0–1.0). Drops when constructs fall back to Command/RawBlock."""

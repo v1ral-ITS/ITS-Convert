@@ -3,10 +3,10 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
-    ListOp, DictOp, Assert, RawBlock,
+    ListOp, DictOp, Assert, RawBlock,    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -41,6 +41,10 @@ class LuaEmitter:
             s, e = self._v(node.start), self._v(node.stop)
             st = f", {self._v(node.step)}" if node.step else ""
             return [f"{p}for {node.var} = {s}, {e} - 1{st} do"] + self._body(node.body, i+1) + [f"{p}end"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for {node.index_var}, {node.value_var} in ipairs({self._v(node.iterable)}) do"] + self._body(node.body, i+1) + [f"{p}end"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var}, _ in pairs({self._v(node.dict_value)}) do"] + self._body(node.body, i+1) + [f"{p}end"]
         if isinstance(node, While):
             return [f"{p}while {self._cond(node.condition)} do"] + self._body(node.body, i+1) + [f"{p}end"]
         if isinstance(node, Break): return [f"{p}break"]
@@ -57,6 +61,30 @@ class LuaEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}local {node.name} = arg[{node.index}]"]
             if node.action == "count" and node.name: return [f"{p}local {node.name} = #arg"]
             return [f"{p}-- argv: {node.action}"]
+        if isinstance(node, Switch):
+            if not node.cases:
+                return self._body(node.default_body, i)
+            subj = self._v(node.subject)
+            first = node.cases[0]
+            lines = [f"{p}if {subj} == {self._v(first.pattern)} then"]
+            lines.extend(self._body(first.body, i+1))
+            for case in node.cases[1:]:
+                lines.append(f"{p}elseif {subj} == {self._v(case.pattern)} then")
+                lines.extend(self._body(case.body, i+1))
+            if node.default_body:
+                lines.append(f"{p}else")
+                lines.extend(self._body(node.default_body, i+1))
+            lines.append(f"{p}end")
+            return lines
+        if isinstance(node, ClassDef):
+            return [f"{p}-- class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}local {node.name or '_fn'} = function({params}) return {self._v(node.body)} end"]
+        if isinstance(node, WithBlock):
+            lines = [f"{p}-- with {self._v(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._body(node.body, i))
+            return lines
         if isinstance(node, TryCatch):
             cv = node.catch_var or "err"
             lines = [f"{p}local ok, {cv} = pcall(function()"]
@@ -138,12 +166,22 @@ class LuaEmitter:
             return f"({m.get(os, os)} {self._v(x)})"
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "fstring" and v.parts:
-            parts = [f"tostring({self._v(p)})" if p.kind != "string" else str(p.value) for p in v.parts]
-            return " .. ".join(parts)
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    escaped = str(p.value).replace("\\", "\\\\").replace('"', '\\"')
+                    parts.append(f'"{escaped}"')
+                else:
+                    parts.append(f"tostring({self._v(p)})")
+            return " .. ".join(parts) if parts else '""'
+
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
-        m = {"==": "==", "!=": "~=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " and ", "or": " or "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' and ')}{self._cond(c.right)})"
+        m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 
 def emit_lua(ir: ScriptIR) -> str: return LuaEmitter().emit(ir)

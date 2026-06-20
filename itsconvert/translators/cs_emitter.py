@@ -3,10 +3,10 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
-    ListOp, DictOp, Assert, RawBlock,
+    ListOp, DictOp, Assert, RawBlock,    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -63,6 +63,36 @@ class CSharpEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}var {node.name} = args[{node.index}];"]
             if node.action == "count" and node.name: return [f"{p}var {node.name} = args.Length;"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, Switch):
+            lines = [f"{p}switch ({self._v(node.subject)}) {{"]
+            for case in node.cases:
+                lines.append(f"{p}    case {self._v(case.pattern)}:")
+                lines.extend(self._body(case.body, i+2))
+                lines.append(f"{p}        break;")
+            if node.default_body:
+                lines.append(f"{p}    default:")
+                lines.extend(self._body(node.default_body, i+2))
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            bases = f" : {node.bases[0]}" if node.bases else ""
+            lines = [f"{p}public class {node.name}{bases} {{"]
+            for field in node.fields:
+                type_hint = field.type_hint or "object"
+                val = f" = {self._v(field.value)}" if field.value else ""
+                lines.append(f"{p}    public {type_hint} {field.name}{val};")
+            for method in node.methods:
+                lines.extend(self._fn(method, i+1))
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}var {node.name or '_fn'} = ({params}) => {self._v(node.body)};"]
+        if isinstance(node, WithBlock):
+            var = node.var or "_ctx"
+            lines = [f"{p}using var {var} = {self._v(node.expr)};"]
+            lines.extend(self._body(node.body, i))
+            return lines
         if isinstance(node, TryCatch):
             cv = node.catch_var or "e"
             lines = [f"{p}try {{"]
@@ -155,11 +185,22 @@ class CSharpEmitter:
             o, x = v.parts; os = self._vs(o); m = {"not": "!"}
             return f"({m.get(os, os)}{self._v(x)})"
         if v.kind == "fstring" and v.parts:
-            parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    escaped = str(p.value).replace("\\", "\\\\").replace('"', '\\"').replace('{', '{{').replace('}', '}}')
+                    parts.append(escaped)
+                else:
+                    inner = self._v(p)
+                    parts.append("{" + inner + "}")
+            return '$"' + "".join(parts) + '"'
+
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
         m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 

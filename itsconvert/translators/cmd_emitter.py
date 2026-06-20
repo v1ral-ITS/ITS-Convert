@@ -8,6 +8,7 @@ from itsconvert.ir import (
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
+    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -64,6 +65,39 @@ class CMDEmitter:
             return self._emit_for_range(node, indent)
         if isinstance(node, For):
             return self._emit_for(node, indent)
+        if isinstance(node, Switch):
+            subject = self._val(node.subject)
+            lines = [f"{prefix}REM switch: {subject}"]
+            for case in node.cases:
+                lines.append(f'{prefix}if {subject}=={self._val(case.pattern)} goto CASE_{self._val_strip(case.pattern)}')
+            if node.default_body:
+                lines.append(f'{prefix}goto CASE_DEFAULT')
+            for case in node.cases:
+                lines.append(f'{prefix}:CASE_{self._val_strip(case.pattern)}')
+                lines.extend(self._emit_body(case.body, indent))
+                lines.append(f'{prefix}goto SWITCH_END')
+            if node.default_body:
+                lines.append(f'{prefix}:CASE_DEFAULT')
+                lines.extend(self._emit_body(node.default_body, indent))
+            lines.append(f'{prefix}:SWITCH_END')
+            return lines
+        if isinstance(node, ClassDef):
+            return [f"{prefix}REM class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{prefix}REM lambda: {node.name or '_fn'} = {params} => {self._val(node.body)}"]
+        if isinstance(node, WithBlock):
+            lines = [f"{prefix}REM with {self._val(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._emit_body(node.body, indent))
+            return lines
+        if isinstance(node, ForEnumerate):
+            lines = [f"{prefix}set /a {node.index_var}=0", f"{prefix}for %%{node.value_var} in ({self._val(node.iterable)}) do ("]
+            lines.extend(self._emit_body(node.body, indent + 1))
+            lines.append(f"{prefix}    set /a {node.index_var}+=1")
+            lines.append(f"{prefix})")
+            return lines
+        if isinstance(node, ForKeys):
+            return [f"{prefix}REM for keys of {self._val(node.dict_value)} as {node.var}"] + self._emit_body(node.body, indent)
         if isinstance(node, Break):
             return [f"{prefix}goto :eof"]
         if isinstance(node, Continue):
@@ -192,6 +226,16 @@ class CMDEmitter:
             return ""
         if v.kind == "var":
             return f"!{v.value}!"
+        if v.kind == "fstring" and v.parts:
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    parts.append(str(p.value))
+                elif p.kind == "var":
+                    parts.append(f"!{p.value}!")
+                else:
+                    parts.append(self._val(p))
+            return "".join(parts)
         if v.kind == "binop" and v.parts and len(v.parts) >= 3:
             left, op, right = v.parts
             op_str = self._val_strip(op)
@@ -204,6 +248,9 @@ class CMDEmitter:
         return self._val(v)
 
     def _condition(self, c: Condition) -> str:
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._condition(c.left)}{bool_map.get(c.op, ' && ')}{self._condition(c.right)})"
         left = self._val(c.left)
         right = self._val(c.right)
         op = c.op

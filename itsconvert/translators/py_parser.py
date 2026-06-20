@@ -6,12 +6,13 @@ import textwrap
 from pathlib import Path
 
 from itsconvert.ir import (
-    ScriptIR, Language, Value, Condition, IRNode,
+    ScriptIR, Language, Value, Condition, ConditionExpr, CompoundCondition, IRNode,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
     If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Param, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
-    ListOp, DictOp, Assert, RawBlock,
+    ListOp, DictOp, Assert, RawBlock, Switch, SwitchCase,
+    ClassDef, ClassField, Lambda, WithBlock,
 )
 from itsconvert.errors import ParseError, UnsupportedConstructError
 
@@ -132,13 +133,44 @@ def _call_name_recursive(node: ast.expr) -> str:
     return "<unknown>"
 
 
-def _condition(test: ast.expr) -> Condition:
-    """Extract a Condition from an AST test expression."""
+def _condition(test: ast.expr) -> ConditionExpr:
+    """Extract a ConditionExpr from an AST test expression."""
+    # Compound: a and b, a or b
+    if isinstance(test, ast.BoolOp):
+        op: Condition | CompoundCondition
+        bool_op = "and" if isinstance(test.op, ast.And) else "or"
+        result: ConditionExpr = _condition(test.values[0])
+        for v in test.values[1:]:
+            result = CompoundCondition(left=result, op=bool_op, right=_condition(v))
+        return result
+    # not expr → flip the condition if simple
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        inner = _condition(test.operand)
+        if isinstance(inner, Condition):
+            flip = {"==": "!=", "!=": "==", ">": "<=", "<": ">=", ">=": "<", "<=": ">"}
+            return Condition(left=inner.left, op=flip.get(inner.op, inner.op), right=inner.right)
+        return inner
+    # Single comparison
     if isinstance(test, ast.Compare) and len(test.ops) == 1:
         op_map = {ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
+                   ast.Gt: ">", ast.GtE: ">=", ast.Is: "==", ast.IsNot: "!=",
+                   ast.In: "==", ast.NotIn: "!="}
+        op_str = op_map.get(type(test.ops[0]), "==")
+        return Condition(left=_val(test.left), op=op_str, right=_val(test.comparators[0]))
+    # Chained comparison: a < b < c → (a < b) and (b < c)
+    if isinstance(test, ast.Compare):
+        op_map = {ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
                    ast.Gt: ">", ast.GtE: ">=", ast.Is: "==", ast.IsNot: "!="}
-        op = op_map.get(type(test.ops[0]), "==")
-        return Condition(left=_val(test.left), op=op, right=_val(test.comparators[0]))
+        parts: list[ConditionExpr] = []
+        left: ast.expr = test.left
+        for op_node, right in zip(test.ops, test.comparators):
+            op_str = op_map.get(type(op_node), "==")
+            parts.append(Condition(left=_val(left), op=op_str, right=_val(right)))
+            left = right
+        chain: ConditionExpr = parts[0]
+        for p in parts[1:]:
+            chain = CompoundCondition(left=chain, op="and", right=p)
+        return chain
     # fallback: treat as bool comparison
     return Condition(left=_val(test), op="!=", right=Value(kind="bool", value=False))
 
@@ -162,7 +194,11 @@ class PythonParser:
             elif result is not None:
                 nodes.append(result)
 
-        return ScriptIR(source_language="py", nodes=nodes, warnings=warnings)
+        # Compute confidence: penalise for RawBlock/Command fallbacks
+        total = len(nodes) or 1
+        fallbacks = sum(1 for n in nodes if isinstance(n, (RawBlock, Command)))
+        confidence = max(0.0, 1.0 - (fallbacks / total) * 0.5)
+        return ScriptIR(source_language="py", nodes=nodes, warnings=warnings, confidence=round(confidence, 2))
 
     def _translate_node(self, node: ast.stmt, warnings: list[str]) -> IRNode | list[IRNode] | None:
         if isinstance(node, ast.Expr):
@@ -206,12 +242,14 @@ class PythonParser:
             return self._translate_assert(node)
         if isinstance(node, ast.With) or isinstance(node, ast.AsyncWith):
             return self._translate_with(node, warnings)
+        # Python 3.10+ match/case
+        if hasattr(ast, "Match") and isinstance(node, ast.Match):
+            return self._translate_match(node, warnings)
         if isinstance(node, ast.Global) or isinstance(node, ast.Nonlocal):
             warnings.append(f"Skipped {type(node).__name__} statement")
             return None
         if isinstance(node, ast.ClassDef):
-            warnings.append(f"Class definitions not supported: class {node.name}")
-            return RawBlock(language="py", code=ast.unparse(node))
+            return self._translate_class(node, warnings)
         if isinstance(node, ast.Delete):
             warnings.append("del statement converted to None assignment")
             targets = []
@@ -280,6 +318,9 @@ class PythonParser:
         if len(node.targets) == 1:
             target = node.targets[0]
             if isinstance(target, ast.Name):
+                # detect lambda assignment: x = lambda a, b: expr
+                if isinstance(node.value, ast.Lambda):
+                    return self._translate_lambda_assign(target.id, node.value)
                 # detect input() assignment: x = input("prompt")
                 if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id == "input":
                     prompt = str(_val(node.value.args[0]).value or "") if node.value.args else ""
@@ -483,16 +524,19 @@ class PythonParser:
                         if kw.arg == "encoding" and isinstance(kw.value, ast.Constant):
                             encoding = kw.value.value
                     body = self._translate_body(node.body, warnings)
-                    var_name = item.optionalvar.id if item.optionalvar and isinstance(item.optionalvar, ast.Name) else None
+                    var_name = item.optional_vars.id if item.optional_vars and isinstance(item.optional_vars, ast.Name) else None
                     if "r" in mode:
                         return FileIONode(op="read", path=path, name=var_name, encoding=encoding)
                     if "w" in mode:
-                        # find f.write() / f.writelines in body
                         content = self._extract_write_content(body, var_name)
                         return FileIONode(op="write", path=path, content=content, encoding=encoding)
                     if "a" in mode:
                         content = self._extract_write_content(body, var_name)
                         return FileIONode(op="append", path=path, content=content, encoding=encoding)
+                # Generic with-block for other context managers
+                var_name = item.optional_vars.id if item.optional_vars and isinstance(item.optional_vars, ast.Name) else None
+                body = self._translate_body(node.body, warnings)
+                return WithBlock(expr=_val(item.context_expr), var=var_name, body=body)
 
         warnings.append("Complex with statement kept as raw block")
         return RawBlock(language="py", code=ast.unparse(node))
@@ -517,6 +561,59 @@ class PythonParser:
     def _translate_file_open(self, call: ast.Call, warnings: list[str]) -> IRNode:
         warnings.append("bare open() call — use 'with open()' for proper file I/O translation")
         return Command(command="open", args=[_val(a) for a in call.args], capture=True, name=None)
+
+    def _translate_class(self, node: ast.ClassDef, warnings: list[str]) -> ClassDef:
+        bases = []
+        for base in node.bases:
+            bases.append(ast.unparse(base))
+        fields: list[ClassField] = []
+        methods: list[FunctionDef] = []
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                fn = self._translate_function(item, warnings)
+                methods.append(fn)
+            elif isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name):
+                        val = _val(item.value)
+                        type_hint = None
+                        fields.append(ClassField(name=target.id, value=val, type_hint=type_hint))
+            elif isinstance(item, ast.AnnAssign):
+                if isinstance(item.target, ast.Name):
+                    type_hint = ast.unparse(item.annotation) if item.annotation else None
+                    val = _val(item.value) if item.value else None
+                    fields.append(ClassField(name=item.target.id, value=val, type_hint=type_hint))
+            # skip pass, docstrings, etc.
+        return ClassDef(name=node.name, bases=bases, fields=fields, methods=methods)
+
+    def _translate_lambda_assign(self, name: str, node: ast.Lambda) -> Lambda:
+        params = [Param(name=arg.arg) for arg in node.args.args]
+        if node.args.vararg:
+            params.append(Param(name=node.args.vararg.arg, vararg=True))
+        body = _val(node.body)
+        return Lambda(name=name, params=params, body=body)
+
+    def _translate_match(self, node: "ast.Match", warnings: list[str]) -> Switch:
+        subject = _val(node.subject)
+        cases: list[SwitchCase] = []
+        default_body: list[IRNode] = []
+        for case in node.cases:
+            body = self._translate_body(case.body, warnings)
+            pattern = case.pattern
+            # default: `case _:`
+            if hasattr(ast, "MatchAs") and isinstance(pattern, ast.MatchAs) and pattern.pattern is None:
+                default_body = body
+            # literal value: `case 42:` or `case "hello":`
+            elif hasattr(ast, "MatchValue") and isinstance(pattern, ast.MatchValue):
+                cases.append(SwitchCase(pattern=_val(pattern.value), body=body))
+            # singleton: `case None:` / `case True:`
+            elif hasattr(ast, "MatchSingleton") and isinstance(pattern, ast.MatchSingleton):
+                cases.append(SwitchCase(pattern=Value(kind="null" if pattern.value is None else "bool", value=pattern.value), body=body))
+            else:
+                # Complex pattern (MatchOr, MatchClass, etc.) — best-effort
+                warnings.append(f"Complex match pattern converted with limited fidelity")
+                cases.append(SwitchCase(pattern=Value(kind="string", value=ast.unparse(pattern)), body=body))
+        return Switch(subject=subject, cases=cases, default_body=default_body)
 
     def _translate_body(self, stmts: list[ast.stmt], warnings: list[str]) -> list[IRNode]:
         nodes: list[IRNode] = []

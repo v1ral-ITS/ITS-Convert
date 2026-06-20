@@ -8,6 +8,7 @@ from itsconvert.ir import (
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
+    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -91,6 +92,39 @@ class PyEmitter:
             if node.action == "count" and node.name:
                 return [f"{prefix}{node.name} = len(sys.argv)"]
             return [f"{prefix}# argv: {node.action}"]
+        if isinstance(node, Switch):
+            prefix = "    " * indent
+            lines = [f"{prefix}match {self._val(node.subject)}:"]
+            for case in node.cases:
+                lines.append(f"{prefix}    case {self._val(case.pattern)}:")
+                lines.extend(self._emit_body(case.body, indent + 2))
+            if node.default_body:
+                lines.append(f"{prefix}    case _:")
+                lines.extend(self._emit_body(node.default_body, indent + 2))
+            return lines
+        if isinstance(node, ClassDef):
+            prefix = "    " * indent
+            bases = f"({', '.join(node.bases)})" if node.bases else ""
+            lines = [f"{prefix}class {node.name}{bases}:"]
+            if not node.fields and not node.methods:
+                lines.append(f"{prefix}    pass")
+                return lines
+            for field in node.fields:
+                val = f" = {self._val(field.value)}" if field.value else ""
+                lines.append(f"{prefix}    {field.name}{val}")
+            for method in node.methods:
+                lines.extend(self._emit_function(method, indent + 1))
+            return lines
+        if isinstance(node, Lambda):
+            prefix = "    " * indent
+            params = ", ".join(pp.name for pp in node.params)
+            return [f"{prefix}{node.name or '_fn'} = lambda {params}: {self._val(node.body)}"]
+        if isinstance(node, WithBlock):
+            prefix = "    " * indent
+            as_clause = f" as {node.var}" if node.var else ""
+            lines = [f"{prefix}with {self._val(node.expr)}{as_clause}:"]
+            lines.extend(self._emit_body(node.body, indent + 1))
+            return lines
         if isinstance(node, TryCatch):
             lines = [f"{prefix}try:"]
             lines.extend(self._emit_body(node.try_body, indent + 1))
@@ -219,10 +253,10 @@ class PyEmitter:
             parts = []
             for p in v.parts:
                 if p.kind == "string":
-                    parts.append(str(p.value))
+                    parts.append(str(p.value).replace("\\", "\\\\").replace('"', '\\"').replace('{', '{{').replace('}', '}}'))
                 else:
-                    parts.append(f"{{{self._val(p)}}}")
-            return repr("".join(parts))
+                    parts.append("{" + self._val(p) + "}")
+            return 'f"' + "".join(parts) + '"'
         return repr(v.value)
 
     def _val_strip(self, v: Value) -> str:
@@ -232,6 +266,9 @@ class PyEmitter:
         return s
 
     def _condition(self, c: Condition) -> str:
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " and ", "or": " or "}
+            return f"({self._condition(c.left)}{bool_map.get(c.op, ' and ')}{self._condition(c.right)})"
         op_map = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._val(c.left)} {op_map.get(c.op, c.op)} {self._val(c.right)}"
 

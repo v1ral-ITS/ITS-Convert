@@ -3,10 +3,10 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
-    ListOp, DictOp, Assert, RawBlock,
+    ListOp, DictOp, Assert, RawBlock,    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -41,6 +41,10 @@ class PerlEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for (my ${node.var} = {s}; ${node.var} < {e}; ${node.var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for my ${node.index_var} (0 .. $#{{{self._v(node.iterable)}}}) {{", f"{p}    my ${node.value_var} = {self._v(node.iterable)}[$${node.index_var}];"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for my ${node.var} (keys %{{{self._v(node.dict_value)}}}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}last;"]
@@ -59,6 +63,31 @@ class PerlEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}my ${node.name} = $ARGV[{node.index}];"]
             if node.action == "count" and node.name: return [f"{p}my ${node.name} = scalar @ARGV;"]
             return [f"{p}# argv: {node.action}"]
+        if isinstance(node, Switch):
+            if not node.cases:
+                return self._body(node.default_body, i)
+            subj = self._v(node.subject)
+            first = node.cases[0]
+            lines = [f"{p}if ({subj} eq {self._v(first.pattern)}) {{"]
+            lines.extend(self._body(first.body, i+1))
+            lines.append(f"{p}}}")
+            for case in node.cases[1:]:
+                lines.append(f"{p}elsif ({subj} eq {self._v(case.pattern)}) {{")
+                lines.extend(self._body(case.body, i+1))
+                lines.append(f"{p}}}")
+            if node.default_body:
+                lines.append(f"{p}else {{")
+                lines.extend(self._body(node.default_body, i+1))
+                lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            return [f"{p}# class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            return [f"{p}my ${node.name or '_fn'} = sub {{ {self._v(node.body)} }};"]
+        if isinstance(node, WithBlock):
+            lines = [f"{p}# with {self._v(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._body(node.body, i))
+            return lines
         if isinstance(node, TryCatch):
             cv = node.catch_var or "err"
             lines = [f"{p}eval {{"]
@@ -141,11 +170,24 @@ class PerlEmitter:
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"${self._v(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "attr" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}->{self._vs(v.parts[1])}"
         if v.kind == "fstring" and v.parts:
-            parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    escaped = str(p.value).replace("\\", "\\\\").replace('"', '\\"').replace("@", "\\@")
+                    parts.append(escaped)
+                elif p.kind == "var":
+                    parts.append(f"${p.value}")
+                else:
+                    inner = self._v(p)
+                    parts.append("${" + inner + "}")
+            return '"' + "".join(parts) + '"'
+
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
         m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 

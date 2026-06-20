@@ -455,3 +455,410 @@ class TestTarExtractSnippet:
         ir = self.parser.parse(self.SNIPPET + '\n')
         result = get_emitter("ps1").emit(ir)
         assert 'tar' in result
+
+
+# --- New IR node tests ---
+
+class TestCompoundCondition:
+    def setup_method(self):
+        self.parser = PythonParser()
+
+    def test_and_condition(self):
+        from itsconvert.ir import CompoundCondition
+        ir = self.parser.parse('if x > 0 and y < 10:\n    pass\n')
+        node = ir.nodes[0]
+        assert isinstance(node, If)
+        assert isinstance(node.condition, CompoundCondition)
+        assert node.condition.op == "and"
+
+    def test_or_condition(self):
+        from itsconvert.ir import CompoundCondition
+        ir = self.parser.parse('if a == 1 or b == 2:\n    pass\n')
+        node = ir.nodes[0]
+        assert isinstance(node.condition, CompoundCondition)
+        assert node.condition.op == "or"
+
+    def test_compound_cond_emitted_in_bash(self):
+        from itsconvert.ir import CompoundCondition, Condition
+        from itsconvert.translators.sh_emitter import BashEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[If(
+                condition=CompoundCondition(
+                    left=Condition(left=Value(kind="var", value="x"), op=">", right=Value(kind="int", value=0)),
+                    op="and",
+                    right=Condition(left=Value(kind="var", value="y"), op="<", right=Value(kind="int", value=10)),
+                ),
+                then_body=[Print(values=[Value(kind="string", value="ok")])],
+            )],
+        )
+        result = BashEmitter().emit(ir)
+        assert "&&" in result
+
+    def test_compound_cond_emitted_in_js(self):
+        from itsconvert.ir import CompoundCondition, Condition
+        from itsconvert.translators.js_emitter import JSEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[If(
+                condition=CompoundCondition(
+                    left=Condition(left=Value(kind="var", value="x"), op=">", right=Value(kind="int", value=0)),
+                    op="or",
+                    right=Condition(left=Value(kind="var", value="y"), op="<", right=Value(kind="int", value=5)),
+                ),
+                then_body=[Print(values=[Value(kind="string", value="ok")])],
+            )],
+        )
+        result = JSEmitter().emit(ir)
+        assert "||" in result
+
+
+class TestSwitchNode:
+    def setup_method(self):
+        self.parser = PythonParser()
+
+    def test_match_parsed(self):
+        from itsconvert.ir import Switch
+        ir = self.parser.parse(
+            'match x:\n    case 1:\n        print("one")\n    case 2:\n        print("two")\n    case _:\n        print("other")\n'
+        )
+        nodes = [n for n in ir.nodes if n.type == "switch"]
+        assert len(nodes) == 1
+        sw = nodes[0]
+        assert len(sw.cases) == 2
+
+    def test_switch_emitted_in_go(self):
+        from itsconvert.ir import Switch, SwitchCase
+        from itsconvert.translators.go_emitter import GoEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[Switch(
+                subject=Value(kind="var", value="x"),
+                cases=[
+                    SwitchCase(pattern=Value(kind="int", value=1), body=[Print(values=[Value(kind="string", value="one")])]),
+                    SwitchCase(pattern=Value(kind="int", value=2), body=[Print(values=[Value(kind="string", value="two")])]),
+                ],
+                default_body=[Print(values=[Value(kind="string", value="other")])],
+            )],
+        )
+        result = GoEmitter().emit(ir)
+        assert "switch" in result
+        assert "case" in result
+
+    def test_switch_emitted_in_rust(self):
+        from itsconvert.ir import Switch, SwitchCase
+        from itsconvert.translators.rs_emitter import RustEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[Switch(
+                subject=Value(kind="var", value="x"),
+                cases=[SwitchCase(pattern=Value(kind="int", value=1), body=[Print(values=[Value(kind="string", value="a")])])],
+                default_body=[],
+            )],
+        )
+        result = RustEmitter().emit(ir)
+        assert "match" in result
+
+
+class TestClassDef:
+    def setup_method(self):
+        self.parser = PythonParser()
+
+    def test_class_parsed(self):
+        from itsconvert.ir import ClassDef
+        ir = self.parser.parse(
+            'class Dog:\n    name = "Rex"\n    def bark(self):\n        print("woof")\n'
+        )
+        classes = [n for n in ir.nodes if n.type == "class_def"]
+        assert len(classes) == 1
+        assert classes[0].name == "Dog"
+
+    def test_class_emitted_in_java(self):
+        from itsconvert.ir import ClassDef, ClassField
+        from itsconvert.translators.java_emitter import JavaEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[ClassDef(
+                name="Dog",
+                bases=[],
+                fields=[ClassField(name="name", value=Value(kind="string", value="Rex"))],
+                methods=[FunctionDef(name="bark", params=[], body=[Print(values=[Value(kind="string", value="woof")])])],
+            )],
+        )
+        result = JavaEmitter().emit(ir)
+        assert "class Dog" in result
+
+
+class TestLambdaNode:
+    def setup_method(self):
+        self.parser = PythonParser()
+
+    def test_lambda_parsed(self):
+        from itsconvert.ir import Lambda
+        ir = self.parser.parse('double = lambda x: x * 2\n')
+        lambdas = [n for n in ir.nodes if n.type == "lambda"]
+        assert len(lambdas) == 1
+        assert lambdas[0].name == "double"
+
+    def test_lambda_emitted_in_js(self):
+        from itsconvert.ir import Lambda, Param
+        from itsconvert.translators.js_emitter import JSEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[Lambda(
+                name="double",
+                params=[Param(name="x")],
+                body=Value(kind="var", value="x"),
+            )],
+        )
+        result = JSEmitter().emit(ir)
+        assert "=>" in result
+
+
+class TestWithBlock:
+    def setup_method(self):
+        self.parser = PythonParser()
+
+    def test_with_parsed(self):
+        from itsconvert.ir import WithBlock
+        # Use a non-open context manager so it becomes WithBlock (not file_io)
+        ir = self.parser.parse('with Lock() as lock:\n    lock.acquire()\n')
+        with_nodes = [n for n in ir.nodes if n.type == "with_block"]
+        assert len(with_nodes) == 1
+
+    def test_with_emitted_in_csharp(self):
+        from itsconvert.ir import WithBlock
+        from itsconvert.translators.cs_emitter import CSharpEmitter
+        ir = ScriptIR(
+            source_language="py",
+            nodes=[WithBlock(
+                expr=Value(kind="var", value='open("f.txt")'),
+                var="f",
+                body=[Assign(name="data", value=Value(kind="var", value="f.read()"))],
+            )],
+        )
+        result = CSharpEmitter().emit(ir)
+        assert "using" in result
+
+
+# --- New parser tests ---
+
+class TestJSParser:
+    def setup_method(self):
+        from itsconvert.translators.js_parser import JSParser
+        self.parser = JSParser()
+
+    def test_const_assign(self):
+        ir = self.parser.parse('const x = 42;\n')
+        assert ir.nodes[0].type == "assign"
+        assert ir.nodes[0].value.kind == "int"
+
+    def test_console_log(self):
+        ir = self.parser.parse('console.log("hello");\n')
+        assert ir.nodes[0].type == "print"
+
+    def test_template_literal(self):
+        ir = self.parser.parse('console.log(`Hello, ${name}!`);\n')
+        assert ir.nodes[0].type == "print"
+        val = ir.nodes[0].values[0]
+        assert val.kind == "fstring"
+
+    def test_function(self):
+        ir = self.parser.parse('function greet(x) {\n  console.log(x);\n}\n')
+        fn = [n for n in ir.nodes if n.type == "function_def"]
+        assert len(fn) == 1
+        assert fn[0].name == "greet"
+
+    def test_for_loop(self):
+        ir = self.parser.parse('for (let i = 0; i < 5; i++) {\n  console.log(i);\n}\n')
+        loops = [n for n in ir.nodes if n.type == "for_range"]
+        assert len(loops) == 1
+
+    def test_if_else(self):
+        ir = self.parser.parse('if (x > 0) {\n  console.log("pos");\n} else {\n  console.log("neg");\n}\n')
+        ifs = [n for n in ir.nodes if n.type == "if"]
+        assert len(ifs) == 1
+        assert len(ifs[0].else_body) == 1
+
+    def test_arrow_function(self):
+        from itsconvert.ir import Lambda
+        ir = self.parser.parse('const double = (x) => x * 2;\n')
+        lambdas = [n for n in ir.nodes if n.type == "lambda"]
+        assert len(lambdas) == 1
+
+    def test_source_language_js(self):
+        ir = self.parser.parse('const x = 1;\n')
+        assert ir.source_language == "js"
+
+    def test_import(self):
+        ir = self.parser.parse("import fs from 'fs';\n")
+        assert ir.nodes[0].type == "import"
+
+    def test_try_catch(self):
+        ir = self.parser.parse('try {\n  x();\n} catch (e) {\n  console.log(e);\n}\n')
+        tc = [n for n in ir.nodes if n.type == "try_catch"]
+        assert len(tc) == 1
+
+
+class TestRubyParser:
+    def setup_method(self):
+        from itsconvert.translators.rb_parser import RubyParser
+        self.parser = RubyParser()
+
+    def test_assign(self):
+        ir = self.parser.parse('x = 42\n')
+        assert ir.nodes[0].type == "assign"
+        assert ir.nodes[0].value.kind == "int"
+
+    def test_puts(self):
+        ir = self.parser.parse('puts "hello"\n')
+        assert ir.nodes[0].type == "print"
+
+    def test_string_interpolation(self):
+        ir = self.parser.parse('puts "Hello, #{name}!"\n')
+        val = ir.nodes[0].values[0]
+        assert val.kind == "fstring"
+
+    def test_def(self):
+        ir = self.parser.parse('def greet(who)\n  puts who\nend\n')
+        fns = [n for n in ir.nodes if n.type == "function_def"]
+        assert len(fns) == 1
+        assert fns[0].name == "greet"
+
+    def test_times(self):
+        ir = self.parser.parse('3.times do |i|\n  puts i\nend\n')
+        loops = [n for n in ir.nodes if n.type == "for_range"]
+        assert len(loops) == 1
+
+    def test_if_elsif_else(self):
+        ir = self.parser.parse('if x > 0\n  puts "pos"\nelsif x < 0\n  puts "neg"\nelse\n  puts "zero"\nend\n')
+        ifs = [n for n in ir.nodes if n.type == "if"]
+        assert len(ifs) == 1
+        assert len(ifs[0].elif_branches) == 1
+        assert len(ifs[0].else_body) == 1
+
+    def test_source_language_rb(self):
+        ir = self.parser.parse('x = 1\n')
+        assert ir.source_language == "rb"
+
+
+class TestGoParser:
+    def setup_method(self):
+        from itsconvert.translators.go_parser import GoParser
+        self.parser = GoParser()
+
+    def test_short_var_decl(self):
+        ir = self.parser.parse('x := 42\n')
+        assert ir.nodes[0].type == "assign"
+
+    def test_fmt_println(self):
+        ir = self.parser.parse('fmt.Println("hello")\n')
+        assert ir.nodes[0].type == "print"
+
+    def test_func(self):
+        ir = self.parser.parse('func greet(name string) {\n    fmt.Println(name)\n}\n')
+        fns = [n for n in ir.nodes if n.type == "function_def"]
+        assert len(fns) == 1
+        assert fns[0].name == "greet"
+
+    def test_for_range_loop(self):
+        ir = self.parser.parse('for i := 0; i < 5; i++ {\n    fmt.Println(i)\n}\n')
+        loops = [n for n in ir.nodes if n.type == "for_range"]
+        assert len(loops) == 1
+
+    def test_switch(self):
+        ir = self.parser.parse('switch x {\ncase 1:\n    fmt.Println("one")\ndefault:\n    fmt.Println("other")\n}\n')
+        switches = [n for n in ir.nodes if n.type == "switch"]
+        assert len(switches) == 1
+
+    def test_source_language_go(self):
+        ir = self.parser.parse('x := 1\n')
+        assert ir.source_language == "go"
+
+
+# --- Type inference and analyzer tests ---
+
+class TestAnalyzer:
+    def setup_method(self):
+        self.parser = PythonParser()
+
+    def test_infer_int(self):
+        from itsconvert.analyzer import infer_types
+        ir = self.parser.parse('x = 42\n')
+        types = infer_types(ir)
+        assert types["x"] == "int"
+
+    def test_infer_float(self):
+        from itsconvert.analyzer import infer_types
+        ir = self.parser.parse('pi = 3.14\n')
+        types = infer_types(ir)
+        assert types["pi"] == "float"
+
+    def test_infer_str(self):
+        from itsconvert.analyzer import infer_types
+        ir = self.parser.parse('name = "Alice"\n')
+        types = infer_types(ir)
+        assert types["name"] == "str"
+
+    def test_infer_bool(self):
+        from itsconvert.analyzer import infer_types
+        ir = self.parser.parse('flag = True\n')
+        types = infer_types(ir)
+        assert types["flag"] == "bool"
+
+    def test_summarize_includes_confidence(self):
+        from itsconvert.analyzer import summarize_ir
+        ir = self.parser.parse('x = 1\n')
+        summary = summarize_ir(ir)
+        assert "Confidence" in summary
+
+    def test_summarize_includes_breakdown(self):
+        from itsconvert.analyzer import summarize_ir
+        ir = self.parser.parse('x = 1\nprint("hi")\n')
+        summary = summarize_ir(ir)
+        assert "assign" in summary
+        assert "print" in summary
+
+
+# --- CMD parser upgrade tests ---
+
+class TestCMDParserUpgrade:
+    def setup_method(self):
+        from itsconvert.translators.cmd_parser import CMDParser
+        self.parser = CMDParser()
+
+    def test_if_exist(self):
+        ir = self.parser.parse('if exist myfile.txt echo found\n')
+        ifs = [n for n in ir.nodes if n.type == "if"]
+        assert len(ifs) == 1
+
+    def test_if_errorlevel(self):
+        ir = self.parser.parse('if errorlevel 1 echo failed\n')
+        ifs = [n for n in ir.nodes if n.type == "if"]
+        assert len(ifs) == 1
+
+    def test_for_l_loop(self):
+        ir = self.parser.parse('for /l %%i in (1,1,5) do echo %%i\n')
+        loops = [n for n in ir.nodes if n.type == "for_range"]
+        assert len(loops) == 1
+
+    def test_goto_becomes_command(self):
+        ir = self.parser.parse('goto :done\n')
+        cmds = [n for n in ir.nodes if n.type == "command"]
+        assert len(cmds) == 1
+        assert "goto" in cmds[0].command
+
+    def test_subroutine(self):
+        ir = self.parser.parse(':myFunc\necho hello\nexit /b\n')
+        fns = [n for n in ir.nodes if n.type == "function_def"]
+        assert len(fns) == 1
+        assert fns[0].name == "myFunc"
+
+    def test_if_defined(self):
+        ir = self.parser.parse('if defined MYVAR echo defined\n')
+        ifs = [n for n in ir.nodes if n.type == "if"]
+        assert len(ifs) == 1
+
+    def test_confidence_field(self):
+        ir = self.parser.parse('echo hello\n')
+        assert 0.0 <= ir.confidence <= 1.0

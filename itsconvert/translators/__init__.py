@@ -24,6 +24,10 @@ _PARSERS = {
     "sh": "itsconvert.translators.sh_parser:BashParser",
     "ps1": "itsconvert.translators.ps1_parser:PS1Parser",
     "cmd": "itsconvert.translators.cmd_parser:CMDParser",
+    "js": "itsconvert.translators.js_parser:JSParser",
+    "ts": "itsconvert.translators.js_parser:TSParser",
+    "rb": "itsconvert.translators.rb_parser:RubyParser",
+    "go": "itsconvert.translators.go_parser:GoParser",
 }
 
 

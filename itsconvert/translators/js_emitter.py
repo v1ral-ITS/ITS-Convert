@@ -7,6 +7,7 @@ from itsconvert.ir import (
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
+    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -66,6 +67,39 @@ class JSEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}let {node.name} = process.argv[{node.index + 2}];"]
             if node.action == "count" and node.name: return [f"{p}let {node.name} = process.argv.length;"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, Switch):
+            lines = [f"{p}switch ({self._v(node.subject)}) {{"]
+            for case in node.cases:
+                lines.append(f"{p}  case {self._v(case.pattern)}:")
+                lines.extend(self._body(case.body, indent + 2))
+                lines.append(f"{p}    break;")
+            if node.default_body:
+                lines.append(f"{p}  default:")
+                lines.extend(self._body(node.default_body, indent + 2))
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            bases = f" extends {node.bases[0]}" if node.bases else ""
+            lines = [f"{p}class {node.name}{bases} {{"]
+            for field in node.fields:
+                val = f" = {self._v(field.value)}" if field.value else ""
+                lines.append(f"{p}  {field.name}{val};")
+            for method in node.methods:
+                lines.extend(self._fn(method, indent + 1))
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}let {node.name or '_fn'} = ({params}) => {self._v(node.body)};"]
+        if isinstance(node, WithBlock):
+            var = node.var or "_ctx"
+            lines = [f"{p}const {var} = {self._v(node.expr)};"]
+            lines.append(f"{p}try {{")
+            lines.extend(self._body(node.body, indent + 1))
+            lines.append(f"{p}}} finally {{")
+            lines.append(f"{p}  if ({var}.close) {var}.close();")
+            lines.append(f"{p}}}")
+            return lines
         if isinstance(node, TryCatch):
             cv = node.catch_var or "err"
             lines = [f"{p}try {{"]
@@ -181,14 +215,23 @@ class JSEmitter:
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "attr" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}.{self._vs(v.parts[1])}"
         if v.kind == "fstring" and v.parts:
-            parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    escaped = str(p.value).replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+                    parts.append(escaped)
+                else:
+                    parts.append(f"${{{self._v(p)}}}")
+            return "`" + "".join(parts) + "`"
         return repr(v.value)
 
     def _s(self, s: str) -> str: return repr(s)
     def _vs(self, v: Value) -> str: s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
 
     def _cond(self, c: Condition) -> str:
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
         m = {"==": "===", "!=": "!===", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         o = m.get(c.op, c.op)
         if c.right.kind == "null": return f"{self._v(c.left)} === null"

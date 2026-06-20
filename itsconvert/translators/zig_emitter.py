@@ -3,10 +3,10 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Exit,
-    If, ElifBranch, ForRange, While,
+    If, ElifBranch, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, FunctionDef, Return, Import,
     EnvVar, Argv, TryCatch, Raise,
-    Assert, RawBlock,
+    Assert, RawBlock,    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -42,6 +42,10 @@ class ZigEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for ({s}..{e}) |{node.var}| {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for ({self._v(node.iterable)}, 0..) |{node.value_var}, {node.index_var}| {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}// for keys of {self._v(node.dict_value)} as {node.var}"] + self._body(node.body, i)
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]
@@ -54,6 +58,27 @@ class ZigEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}const {node.name} = std.process.args()[{node.index + 1}];"]
             if node.action == "count" and node.name: return [f"{p}const {node.name} = std.process.args().len;"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, Switch):
+            lines = [f"{p}switch ({self._v(node.subject)}) {{"]
+            for case in node.cases:
+                lines.append(f"{p}    {self._v(case.pattern)} => {{")
+                lines.extend(self._body(case.body, i+2))
+                lines.append(f"{p}    }},")
+            if node.default_body:
+                lines.append(f"{p}    else => {{")
+                lines.extend(self._body(node.default_body, i+2))
+                lines.append(f"{p}    }},")
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            return [f"{p}// class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}// lambda: {node.name or '_fn'} = ({params}) => {self._v(node.body)}"]
+        if isinstance(node, WithBlock):
+            lines = [f"{p}// with {self._v(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._body(node.body, i))
+            return lines
         if isinstance(node, Raise): return [f"{p}return error.Unexpected;"]
         if isinstance(node, Assert): return [f"{p}std.debug.assert({self._cond(node.condition)});"]
         if isinstance(node, RawBlock): return [f"{p}// raw ({node.language})"] + [f"{p}// {l}" for l in node.code.split("\n")]
@@ -88,11 +113,20 @@ class ZigEmitter:
         if v.kind == "null": return "null"
         if v.kind == "var": return str(v.value)
         if v.kind == "fstring" and v.parts:
-            parts = [f"{{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    parts.append(str(p.value).replace("\\", "\\\\").replace('"', '\\"'))
+                else:
+                    parts.append("{}")
+            return '"' + "".join(parts) + '"'
+
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
         m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 

@@ -8,6 +8,7 @@ from itsconvert.ir import (
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
+    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -107,6 +108,17 @@ class BashEmitter:
             return self._emit_env_var(node, prefix)
         if isinstance(node, Argv):
             return self._emit_argv(node, prefix)
+        if isinstance(node, Switch):
+            return self._emit_switch(node, indent)
+        if isinstance(node, ClassDef):
+            return [f"{prefix}# class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{prefix}# lambda: {node.name or '_fn'} = {params} => {self._val(node.body)}"]
+        if isinstance(node, WithBlock):
+            lines = [f"{prefix}# with {self._val(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._emit_body(node.body, indent))
+            return lines
         if isinstance(node, TryCatch):
             return self._emit_try(node, indent)
         if isinstance(node, Raise):
@@ -265,6 +277,20 @@ class BashEmitter:
             return [f"{prefix}{name}=$#"]
         return [f"{prefix}# argv: {node.action}"]
 
+    def _emit_switch(self, node: Switch, indent: int) -> list[str]:
+        prefix = "    " * indent
+        lines = [f"{prefix}case {self._val(node.subject)} in"]
+        for case in node.cases:
+            lines.append(f"{prefix}  {self._val(case.pattern)})")
+            lines.extend(self._emit_body(case.body, indent + 2))
+            lines.append(f"{prefix}    ;;")
+        if node.default_body:
+            lines.append(f"{prefix}  *)")
+            lines.extend(self._emit_body(node.default_body, indent + 2))
+            lines.append(f"{prefix}    ;;")
+        lines.append(f"{prefix}esac")
+        return lines
+
     def _emit_try(self, node: TryCatch, indent: int) -> list[str]:
         prefix = "    " * indent
         catch_var = node.catch_var or "err"
@@ -405,6 +431,9 @@ class BashEmitter:
         return s
 
     def _condition(self, c: Condition) -> str:
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._condition(c.left)}{bool_map.get(c.op, ' && ')}{self._condition(c.right)})"
         left = self._val(c.left)
         right = self._val(c.right)
         op = c.op

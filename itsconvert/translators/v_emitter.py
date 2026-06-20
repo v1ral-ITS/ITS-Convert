@@ -3,10 +3,10 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
-    ListOp, DictOp, Assert, RawBlock,
+    ListOp, DictOp, Assert, RawBlock,    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -44,6 +44,10 @@ class VLangEmitter:
             return [f"{p}for {node.var} in {s}..{e} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
             return [f"{p}for {node.var} in {self._v(node.iterable)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for {node.index_var}, {node.value_var} in {self._v(node.iterable)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var}, _ in {self._v(node.dict_value)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}for {self._cond(node.condition)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break"]
@@ -59,6 +63,27 @@ class VLangEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}{node.name} := os.args[{node.index + 1}]"]
             if node.action == "count" and node.name: return [f"{p}{node.name} := os.args.len"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, Switch):
+            lines = [f"{p}match {self._v(node.subject)} {{"]
+            for case in node.cases:
+                lines.append(f"{p}	{self._v(case.pattern)} {{")
+                lines.extend(self._body(case.body, i+1))
+                lines.append(f"{p}	}}")
+            if node.default_body:
+                lines.append(f"{p}	else {{")
+                lines.extend(self._body(node.default_body, i+1))
+                lines.append(f"{p}	}}")
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            return [f"{p}// class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}// lambda: {node.name or '_fn'} = ({params}) => {self._v(node.body)}"]
+        if isinstance(node, WithBlock):
+            lines = [f"{p}// with {self._v(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._body(node.body, i))
+            return lines
         if isinstance(node, TryCatch):
             lines = [f"{p}/* V: no try-catch */"]
             lines.extend(self._body(node.try_body, i))
@@ -128,11 +153,24 @@ class VLangEmitter:
             l, o, r = v.parts; os = self._vs(o); m = {"and": "&&", "or": "||"}
             return f"({self._v(l)} {m.get(os, os)} {self._v(r)})"
         if v.kind == "fstring" and v.parts:
-            parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    escaped = str(p.value).replace("\\", "\\\\").replace("'", "\\'").replace("$", "\\$")
+                    parts.append(escaped)
+                elif p.kind == "var":
+                    parts.append(f"${p.value}")
+                else:
+                    inner = self._v(p)
+                    parts.append("${" + inner + "}")
+            return "'" + "".join(parts) + "'"
+
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
         m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 

@@ -3,10 +3,11 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
+    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -48,6 +49,10 @@ class RustEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for {node.var} in {s}..{e} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for ({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.iter().enumerate() {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var} in {self._v(node.dict_value)}.keys() {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while {self._cond(node.condition)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]
@@ -63,6 +68,41 @@ class RustEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}let {node.name} = std::env::args().nth({node.index + 1}).unwrap();"]
             if node.action == "count" and node.name: return [f"{p}let {node.name} = std::env::args().count();"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, Switch):
+            lines = [f"{p}match {self._v(node.subject)} {{"]
+            for case in node.cases:
+                lines.append(f"{p}    {self._v(case.pattern)} => {{")
+                lines.extend(self._body(case.body, i + 2))
+                lines.append(f"{p}    }},")
+            if node.default_body:
+                lines.append(f"{p}    _ => {{")
+                lines.extend(self._body(node.default_body, i + 2))
+                lines.append(f"{p}    }},")
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            lines = [f"{p}struct {node.name} {{"]
+            for field in node.fields:
+                lines.append(f"{p}    {field.name}: String,")
+            lines.append(f"{p}}}")
+            lines.append(f"{p}impl {node.name} {{")
+            for method in node.methods:
+                params = ", ".join(("&self" if pp.name == "self" else f"{pp.name}: &str") for pp in method.params if not pp.vararg and not pp.kwarg)
+                lines.append(f"{p}    fn {method.name}({params}) -> String {{")
+                lines.extend(self._body(method.body, i + 2))
+                lines.append(f"{p}    }}")
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, Lambda):
+            params = ", ".join(pp.name for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}let {node.name or '_fn'} = |{params}| {self._v(node.body)};"]
+        if isinstance(node, WithBlock):
+            var = node.var or "_ctx"
+            lines = [f"{p}let {var} = {self._v(node.expr)};"]
+            lines.append(f"{p}{{")
+            lines.extend(self._body(node.body, i + 1))
+            lines.append(f"{p}}}")
+            return lines
         if isinstance(node, TryCatch):
             cv = node.catch_var or "err"
             lines = [f"{p}match std::panic::catch_unwind(|| {{"]
@@ -149,11 +189,23 @@ class RustEmitter:
             o, x = v.parts; os = self._vs(o); m = {"not": "!"}
             return f"({m.get(os, os)}{self._v(x)})"
         if v.kind == "fstring" and v.parts:
-            parts = [f"{{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            fmt_str = ""
+            args = []
+            for p in v.parts:
+                if p.kind == "string":
+                    fmt_str += str(p.value).replace("{", "{{").replace("}", "}}")
+                else:
+                    fmt_str += "{}"
+                    args.append(self._v(p))
+            if args:
+                return f'format!("{fmt_str}", {", ".join(args)})'
+            return f'String::from("{fmt_str}")'
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
         m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 

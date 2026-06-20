@@ -3,10 +3,10 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
-    ListOp, DictOp, Assert, RawBlock,
+    ListOp, DictOp, Assert, RawBlock,    Switch, SwitchCase, ClassDef, ClassField, Lambda, WithBlock, CompoundCondition,
 )
 
 
@@ -41,6 +41,10 @@ class PHPEmitter:
             s, e = self._v(node.start), self._v(node.stop)
             st = f", {self._v(node.step)}" if node.step else ""
             return [f"{p}for (${node.var} = {s}; ${node.var} < {e}; ${node.var} += {st or '1'}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}foreach ({self._v(node.iterable)} as ${node.index_var} => ${node.value_var}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}foreach (array_keys({self._v(node.dict_value)}) as ${node.var}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]
@@ -61,6 +65,26 @@ class PHPEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}${node.name} = $argv[{node.index + 1}];"]
             if node.action == "count" and node.name: return [f"{p}${node.name} = $argc;"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, Switch):
+            lines = [f"{p}switch ({self._v(node.subject)}) {{"]
+            for case in node.cases:
+                lines.append(f"{p}    case {self._v(case.pattern)}:")
+                lines.extend(self._body(case.body, i+2))
+                lines.append(f"{p}        break;")
+            if node.default_body:
+                lines.append(f"{p}    default:")
+                lines.extend(self._body(node.default_body, i+2))
+            lines.append(f"{p}}}")
+            return lines
+        if isinstance(node, ClassDef):
+            return [f"{p}// class {node.name} (not supported in this language)"]
+        if isinstance(node, Lambda):
+            params = ", ".join(f"${pp.name}" for pp in node.params if not pp.vararg and not pp.kwarg)
+            return [f"{p}${node.name or '_fn'} = fn({params}) => {self._v(node.body)};"]
+        if isinstance(node, WithBlock):
+            lines = [f"{p}// with {self._v(node.expr)} as {node.var or '_ctx'}:"]
+            lines.extend(self._body(node.body, i))
+            return lines
         if isinstance(node, TryCatch):
             cv = node.catch_var or "e"
             lines = [f"{p}try {{"]
@@ -170,12 +194,25 @@ class PHPEmitter:
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"${self._vs(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "attr" and v.parts and len(v.parts) >= 2: return f"${self._vs(v.parts[0])}->{self._vs(v.parts[1])}"
         if v.kind == "fstring" and v.parts:
-            parts = ["$" + "{" + self._vs(p) + "}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = []
+            for p in v.parts:
+                if p.kind == "string":
+                    escaped = str(p.value).replace("\\", "\\\\").replace('"', '\\"')
+                    parts.append(escaped)
+                elif p.kind == "var":
+                    parts.append(f"${{{p.value}}}")
+                else:
+                    inner = self._v(p)
+                    parts.append("{" + inner + "}")
+            return '"' + "".join(parts) + '"'
+
         return repr(v.value)
-    def _vs(self, v): s = self._v(v); return s.lstrip("$").strip("'\"") if s.startswith(("$", "'", '"')) else s
+    def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):
-        m = {"==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
+        if isinstance(c, CompoundCondition):
+            bool_map = {"and": " && ", "or": " || "}
+            return f"({self._cond(c.left)}{bool_map.get(c.op, ' && ')}{self._cond(c.right)})"
+        m = {"==": "==", "!=": "!=", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         return f"{self._v(c.left)} {m.get(c.op, c.op)} {self._v(c.right)}"
 
 def emit_php(ir: ScriptIR) -> str: return PHPEmitter().emit(ir)
