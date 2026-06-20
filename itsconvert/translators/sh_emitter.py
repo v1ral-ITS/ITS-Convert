@@ -56,9 +56,11 @@ class BashEmitter:
                 return [f'{prefix}read -r -p "{node.prompt} " {node.name}']
             return [f"{prefix}read -r {node.name}"]
         if isinstance(node, Command):
+            args_str = self._emit_args(node.args)
+            full = f"{node.command} {args_str}".strip() if args_str else node.command
             if node.capture and node.name:
-                return [f"{prefix}{node.name}=$({node.command} {self._emit_args(node.args)})"]
-            return [f"{prefix}{node.command} {self._emit_args(node.args)}"]
+                return [f"{prefix}{node.name}=$({full})"]
+            return [f"{prefix}{full}"]
         if isinstance(node, Exit):
             return [f"{prefix}exit {node.code}"]
         if isinstance(node, If):
@@ -342,7 +344,10 @@ class BashEmitter:
         if v.kind == "null":
             return '""'
         if v.kind == "var":
-            return f"${v.value}" if not str(v.value).startswith("$") else str(v.value)
+            val_str = str(v.value)
+            if val_str.startswith("$"):
+                return val_str
+            return f"${{{val_str}}}"
         if v.kind == "list":
             if v.parts:
                 items = " ".join(self._val(p) for p in v.parts)
@@ -380,7 +385,15 @@ class BashEmitter:
         if v.kind == "fstring" and v.parts:
             parts = []
             for p in v.parts:
-                parts.append(self._val(p))
+                if p.kind == "string":
+                    parts.append(str(p.value))
+                elif p.kind == "var":
+                    parts.append(f"${{{p.value}}}")
+                else:
+                    inner = self._val(p)
+                    if inner.startswith('"') and inner.endswith('"'):
+                        inner = inner[1:-1]
+                    parts.append(inner)
             return f'"{"".join(parts)}"'
         return f'"{v.value or ""}"'
 

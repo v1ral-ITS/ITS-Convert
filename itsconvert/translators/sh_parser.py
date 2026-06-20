@@ -11,6 +11,9 @@ from itsconvert.ir import (
 from itsconvert.errors import ParseError
 from itsconvert.translators import Parser
 
+# Matches ${var} or $var (not followed by another word char)
+_BASH_VAR_RE = re.compile(r'\$\{(\w+)\}|\$(\w+)')
+
 
 class BashParser(Parser):
     """Parse Bash/sh source into ScriptIR using line-based heuristics."""
@@ -121,8 +124,12 @@ class BashParser(Parser):
                 nodes.append(EnvVar(action="get", name=env_get.group(2), result_name=env_get.group(1)))
                 i += 1
                 continue
-            # fallback: treat as command
-            nodes.append(Command(command=line, args=[], capture=False, name=None))
+            # fallback: treat as command, parse args with variable interpolation
+            tokens = self._split_command_line(line)
+            if tokens:
+                cmd = tokens[0]
+                args = [self._parse_bash_value(t) for t in tokens[1:]]
+                nodes.append(Command(command=cmd, args=args, capture=False, name=None))
             i += 1
 
         return ScriptIR(source_language="sh", nodes=nodes, warnings=warnings)
@@ -197,3 +204,54 @@ class BashParser(Parser):
         if assign:
             return Assign(name=assign.group(1), value=Value(kind="string", value=assign.group(2).strip('"').strip("'")))
         return Command(command=line, args=[], capture=False, name=None)
+
+    def _split_command_line(self, line: str) -> list[str]:
+        """Split a bash command line into tokens, respecting single and double quotes."""
+        tokens: list[str] = []
+        current: list[str] = []
+        in_single = False
+        in_double = False
+        i = 0
+        while i < len(line):
+            c = line[i]
+            if c == "'" and not in_double:
+                in_single = not in_single
+            elif c == '"' and not in_single:
+                in_double = not in_double
+            elif c == ' ' and not in_single and not in_double:
+                if current:
+                    tokens.append(''.join(current))
+                    current = []
+            else:
+                current.append(c)
+            i += 1
+        if current:
+            tokens.append(''.join(current))
+        return tokens
+
+    def _parse_bash_value(self, word: str) -> Value:
+        """Parse a single bash word (possibly with ${var} interpolation) into a Value."""
+        # Pure ${var} reference
+        m = re.match(r'^\$\{(\w+)\}$', word)
+        if m:
+            return Value(kind="var", value=m.group(1))
+        # Pure $var reference
+        m = re.match(r'^\$(\w+)$', word)
+        if m:
+            return Value(kind="var", value=m.group(1))
+        # Mixed: text with embedded ${var} / $var interpolation → fstring
+        if _BASH_VAR_RE.search(word):
+            parts: list[Value] = []
+            pos = 0
+            for m in _BASH_VAR_RE.finditer(word):
+                if m.start() > pos:
+                    parts.append(Value(kind="string", value=word[pos:m.start()]))
+                var_name = m.group(1) or m.group(2)
+                parts.append(Value(kind="var", value=var_name))
+                pos = m.end()
+            if pos < len(word):
+                parts.append(Value(kind="string", value=word[pos:]))
+            return Value(kind="fstring", parts=parts)
+        # Plain literal — strip surrounding quotes if present
+        stripped = word.strip('"').strip("'")
+        return Value(kind="string", value=stripped)

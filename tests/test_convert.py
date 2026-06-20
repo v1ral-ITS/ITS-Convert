@@ -377,3 +377,81 @@ class TestUtilsExtended:
         assert infer_language(Path("test.nim")) == "nim"
         assert infer_language(Path("test.zig")) == "zig"
 
+
+# --- Tar Extract Snippet Tests (blinksh/snippets) ---
+
+class TestTarExtractSnippet:
+    """Tests for the tar extract snippet from https://github.com/blinksh/snippets/blob/main/tar/extract.sh"""
+
+    SNIPPET = 'tar xvf ${archive_name}.tar.${extension} -C ${to_path}'
+
+    def setup_method(self):
+        self.parser = BashParser()
+        self.emitter = BashEmitter()
+
+    def test_parse_produces_command_node(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        assert len(ir.nodes) == 1
+        assert ir.nodes[0].type == "command"
+
+    def test_parse_command_name_is_tar(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        node = ir.nodes[0]
+        assert node.command == "tar"
+
+    def test_parse_flags_arg(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        node = ir.nodes[0]
+        assert len(node.args) == 4
+        assert node.args[0].kind == "string"
+        assert node.args[0].value == "xvf"
+
+    def test_parse_archive_fstring(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        node = ir.nodes[0]
+        archive_arg = node.args[1]
+        # ${archive_name}.tar.${extension} → fstring with var/string/var parts
+        assert archive_arg.kind == "fstring"
+        var_names = [p.value for p in archive_arg.parts if p.kind == "var"]
+        assert "archive_name" in var_names
+        assert "extension" in var_names
+
+    def test_parse_target_path_var(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        node = ir.nodes[0]
+        path_arg = node.args[3]
+        assert path_arg.kind == "var"
+        assert path_arg.value == "to_path"
+
+    def test_emit_bash_contains_tar(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        result = self.emitter.emit(ir)
+        assert 'tar' in result
+
+    def test_emit_bash_roundtrip_variable_interpolation(self):
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        result = self.emitter.emit(ir)
+        assert '${archive_name}' in result
+        assert '${extension}' in result
+        assert '${to_path}' in result
+
+    def test_emit_bash_from_example_file(self):
+        source = (EXAMPLES / "tar_extract.sh").read_text()
+        ir = self.parser.parse(source)
+        result = self.emitter.emit(ir)
+        assert 'tar' in result
+        assert '${archive_name}' in result
+        assert '${to_path}' in result
+
+    def test_translate_to_python(self):
+        from itsconvert.translators import get_emitter
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        result = get_emitter("py").emit(ir)
+        assert 'subprocess' in result
+        assert 'tar' in result
+
+    def test_translate_to_powershell(self):
+        from itsconvert.translators import get_emitter
+        ir = self.parser.parse(self.SNIPPET + '\n')
+        result = get_emitter("ps1").emit(ir)
+        assert 'tar' in result

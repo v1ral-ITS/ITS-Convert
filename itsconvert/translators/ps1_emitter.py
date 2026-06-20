@@ -343,7 +343,15 @@ class PowerShellEmitter:
         if v.kind == "fstring" and v.parts:
             parts = []
             for p in v.parts:
-                parts.append(self._val(p))
+                if p.kind == "string":
+                    parts.append(str(p.value))
+                elif p.kind == "var":
+                    parts.append(f"${{{p.value}}}")
+                else:
+                    inner = self._val(p)
+                    if inner.startswith('"') and inner.endswith('"'):
+                        inner = inner[1:-1]
+                    parts.append(inner)
             return f'"{"".join(parts)}"'
         return f'"{v.value or ""}"'
 
