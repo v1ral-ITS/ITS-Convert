@@ -23,7 +23,17 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+      - name: Check Factory API key
+        id: factory-api-key
+        run: |
+          if [ -n "${{ secrets.FACTORY_API_KEY }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "FACTORY_API_KEY is not configured; skipping Droid Auto Review."
+          fi
       - name: Run Droid Auto Review
+        if: steps.factory-api-key.outputs.configured == 'true'
         uses: Factory-AI/droid-action@main
         with:
           factory_api_key: ${{ secrets.FACTORY_API_KEY }}
