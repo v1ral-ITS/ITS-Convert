@@ -60,6 +60,16 @@ Each emitter handles: variables, print, input, if/elif/else, for/for-range/while
 
 ## Install
 
+### From npm
+
+```bash
+npm install -g itsconvert
+python -m pip install pydantic rich typer
+itsconvert languages
+```
+
+The npm package is a thin launcher around the Python CLI in this repository, so you still need **Python 3.11+** and the Python runtime dependencies installed.
+
 ### From PyPI (when published)
 
 ```bash
@@ -248,6 +258,21 @@ pytest tests/ -v
 # 4. Add file extension to utils.py mapping
 # 5. Add tests in tests/test_convert.py
 ```
+
+## Publish to npm
+
+```bash
+# 1. Log into npm
+npm login
+
+# 2. Review the package contents
+npm pack --dry-run
+
+# 3. Publish your first public package
+npm publish --access public
+```
+
+If you also publish to PyPI, keep the version in `package.json` and `pyproject.toml` in sync.
 
 ## License
 

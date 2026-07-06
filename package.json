@@ -1,0 +1,45 @@
+{
+  "name": "itsconvert",
+  "version": "0.1.0",
+  "description": "Translate automation scripts across 25 languages via an intermediate representation",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "itsconvert": "./bin/itsconvert.js"
+  },
+  "files": [
+    "bin/itsconvert.js",
+    "itsconvert/**/*.py",
+    "README.md",
+    "LICENSE",
+    "requirements.txt"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "translator",
+    "cross-language",
+    "code-converter",
+    "ir",
+    "python",
+    "bash",
+    "powershell",
+    "go",
+    "rust",
+    "javascript",
+    "typescript",
+    "ruby"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/v1ral-its/ITS-Convert.git"
+  },
+  "bugs": {
+    "url": "https://github.com/v1ral-its/ITS-Convert/issues"
+  },
+  "homepage": "https://github.com/v1ral-its/ITS-Convert#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}
