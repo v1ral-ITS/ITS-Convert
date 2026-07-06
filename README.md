@@ -269,7 +269,7 @@ npm login
 npm pack --dry-run
 
 # 3. Publish your first public package
-npm publish --access public
+npm publish
 ```
 
 If you also publish to PyPI, keep the version in `package.json` and `pyproject.toml` in sync.
