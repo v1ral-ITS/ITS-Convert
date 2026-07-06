@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -42,6 +42,12 @@ class DartEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for (var {node.var} = {s}; {node.var} < {e}; {node.var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}final __{node.value_var}_list = {self._v(node.iterable)};",
+                    f"{p}for (int {node.index_var} = 0; {node.index_var} < __{node.value_var}_list.length; {node.index_var}++) {{",
+                    f"{p}    final {node.value_var} = __{node.value_var}_list[{node.index_var}];"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for (final {node.var} in {self._v(node.dict_value)}.keys) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]

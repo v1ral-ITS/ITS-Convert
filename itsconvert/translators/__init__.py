@@ -63,6 +63,10 @@ _EMITTERS = {
     "nim": "itsconvert.translators.nim_emitter:NimEmitter",
     "zig": "itsconvert.translators.zig_emitter:ZigEmitter",
     "v": "itsconvert.translators.v_emitter:VLangEmitter",
+    "jl": "itsconvert.translators.julia_emitter:JuliaEmitter",
+    "hs": "itsconvert.translators.haskell_emitter:HaskellEmitter",
+    "ex": "itsconvert.translators.elixir_emitter:ElixirEmitter",
+    "fs": "itsconvert.translators.fsharp_emitter:FSharpEmitter",
 }
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Exit,
-    If, ElifBranch, ForRange, While,
+    If, ElifBranch, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, FunctionDef, Return, Import,
     EnvVar, Argv, TryCatch, Raise,
     Assert, RawBlock,
@@ -42,6 +42,14 @@ class ZigEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for ({s}..{e}) |{node.var}| {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}var {node.index_var}: usize = 0;",
+                    f"{p}for ({self._v(node.iterable)}) |{node.value_var}| {{",
+                    f"{p}    defer {node.index_var} += 1;"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}var iter_{node.var} = {self._v(node.dict_value)}.iterator();",
+                    f"{p}while (iter_{node.var}.next()) |entry| {{",
+                    f"{p}    const {node.var} = entry.key_ptr.*;"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]

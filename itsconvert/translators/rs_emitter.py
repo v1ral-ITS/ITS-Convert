@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -48,6 +48,10 @@ class RustEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for {node.var} in {s}..{e} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for ({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.iter().enumerate() {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var} in {self._v(node.dict_value)}.keys() {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while {self._cond(node.condition)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]
@@ -77,6 +81,25 @@ class RustEmitter:
         if isinstance(node, Raise): return [f"{p}panic!({self._v(node.message) if node.message else '\"Error\"'});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}// string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}let {node.name} = {base}.to_uppercase();']
+            if node.op == "lower" and node.name: return [f'{p}let {node.name} = {base}.to_lowercase();']
+            if node.op == "strip" and node.name: return [f'{p}let {node.name} = {base}.trim().to_string();']
+            if node.op == "len" and node.name: return [f'{p}let {node.name} = {base}.len();']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}let {node.name} = {base}.replace({self._v(node.operands[1])}.as_str(), {self._v(node.operands[2])}.as_str());']
+            if node.op == "split" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name}: Vec<&str> = {base}.split({self._v(node.operands[1])}.as_str()).collect();']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.contains({self._v(node.operands[1])}.as_str());']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.starts_with({self._v(node.operands[1])}.as_str());']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.ends_with({self._v(node.operands[1])}.as_str());']
+            return [f"{p}// string_op: {node.op}"]
+        if isinstance(node, FileIONode): return self._file(node, p)
         if isinstance(node, Assert): return [f"{p}assert!({self._cond(node.condition)});"]
         if isinstance(node, RawBlock): return [f"{p}// raw ({node.language})"] + [f"{p}// {l}" for l in node.code.split("\n")]
         return [f"{p}// FIXME: {node.type}"]
@@ -132,6 +155,18 @@ class RustEmitter:
         if n.action == "len" and n.result_name: return [f"{p}let {n.result_name} = {nm}.len();"]
         return [f"{p}// dict: {n.action}"]
 
+    def _file(self, n, p):
+        path = self._v(n.path)
+        if n.op == "read" and n.name: return [f'{p}let {n.name} = std::fs::read_to_string({path}).unwrap_or_default();']
+        if n.op == "write" and n.content: return [f'{p}std::fs::write({path}, {self._v(n.content)}).unwrap();']
+        if n.op == "append" and n.content:
+            return [f'{p}use std::io::Write; let mut _f = std::fs::OpenOptions::new().append(true).open({path}).unwrap();',
+                    f'{p}_f.write_all({self._v(n.content)}.as_bytes()).unwrap();']
+        if n.op == "exists" and n.name: return [f'{p}let {n.name} = std::path::Path::new({path}).exists();']
+        if n.op == "mkdir": return [f'{p}std::fs::create_dir_all({path}).unwrap();']
+        if n.op == "delete": return [f'{p}std::fs::remove_file({path}).unwrap_or(());']
+        return [f"{p}// file: {n.op}"]
+
     def _body(self, nodes, i): return [l for n in nodes for l in self._n(n, i)]
     def _args(self, a): return " ".join(self._v(x) for x in a)
     def _v(self, v):
@@ -149,8 +184,17 @@ class RustEmitter:
             o, x = v.parts; os = self._vs(o); m = {"not": "!"}
             return f"({m.get(os, os)}{self._v(x)})"
         if v.kind == "fstring" and v.parts:
-            parts = [f"{{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            fmt_str = ""
+            args = []
+            for p in v.parts:
+                if p.kind == "string":
+                    fmt_str += str(p.value).replace("{", "{{").replace("}", "}}")
+                else:
+                    fmt_str += "{}"
+                    args.append(self._v(p))
+            if args:
+                return f'format!("{fmt_str}", {", ".join(args)})'
+            return repr(fmt_str)
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):

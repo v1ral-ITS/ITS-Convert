@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -41,6 +41,10 @@ class PHPEmitter:
             s, e = self._v(node.start), self._v(node.stop)
             st = f", {self._v(node.step)}" if node.step else ""
             return [f"{p}for (${node.var} = {s}; ${node.var} < {e}; ${node.var} += {st or '1'}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}foreach ({self._v(node.iterable)} as ${node.index_var} => ${node.value_var}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}foreach (array_keys({self._v(node.dict_value)}) as ${node.var}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]

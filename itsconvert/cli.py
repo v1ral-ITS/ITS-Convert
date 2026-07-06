@@ -20,6 +20,7 @@ _SUFFIX_MAP = {
     "java": ".java", "c": ".c", "cpp": ".cpp", "cs": ".cs",
     "swift": ".swift", "kt": ".kt", "dart": ".dart", "r": ".R",
     "scala": ".scala", "nim": ".nim", "zig": ".zig", "v": ".v",
+    "jl": ".jl", "hs": ".hs", "ex": ".ex", "fs": ".fs",
 }
 
 

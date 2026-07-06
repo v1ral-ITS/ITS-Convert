@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -38,6 +38,11 @@ class REmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for ({node.var} in {s}:{e}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for ({node.index_var} in seq_along({self._v(node.iterable)})) {{",
+                    f"{p}    {node.value_var} <- {self._v(node.iterable)}[[{node.index_var}]]"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for ({node.var} in names({self._v(node.dict_value)})) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break"]

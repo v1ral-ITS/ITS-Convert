@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -37,6 +37,10 @@ class SwiftEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for {node.var} in {s}..<{e} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for ({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.enumerated() {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var} in {self._v(node.dict_value)}.keys {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While): return [f"{p}while {self._cond(node.condition)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break"]
         if isinstance(node, Continue): return [f"{p}continue"]
@@ -44,6 +48,22 @@ class SwiftEmitter:
         if isinstance(node, FunctionDef): return self._fn(node, i)
         if isinstance(node, Return): return [f"{p}return{(' ' + self._v(node.value)) if node.value else ''}"]
         if isinstance(node, Import): return [f"{p}import {node.module}"]
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}// string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}let {node.name} = {base}.uppercased()']
+            if node.op == "lower" and node.name: return [f'{p}let {node.name} = {base}.lowercased()']
+            if node.op == "strip" and node.name: return [f'{p}let {node.name} = {base}.trimmingCharacters(in: .whitespaces)']
+            if node.op == "len" and node.name: return [f'{p}let {node.name} = {base}.count']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}let {node.name} = {base}.replacingOccurrences(of: {self._v(node.operands[1])}, with: {self._v(node.operands[2])})']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.contains({self._v(node.operands[1])})']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.hasPrefix({self._v(node.operands[1])})']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.hasSuffix({self._v(node.operands[1])})']
+            return [f"{p}// string_op: {node.op}"]
         if isinstance(node, EnvVar):
             if node.action == "get" and node.result_name: return [f'{p}let {node.result_name} = ProcessInfo.processInfo.environment["{node.name}"]']
             return [f"{p}// env: {node.action}"]

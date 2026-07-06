@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -47,6 +47,10 @@ class CSharpEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for (var {node.var} = {s}; {node.var} < {e}; {node.var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}foreach (var ({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.Select((v, i) => (i, v))) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}foreach (var {node.var} in {self._v(node.dict_value)}.Keys) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
             return [f"{p}foreach (var {node.var} in {self._v(node.iterable)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
@@ -55,6 +59,24 @@ class CSharpEmitter:
         if isinstance(node, Continue): return [f"{p}continue;"]
         if isinstance(node, Pass): return [f"{p}// pass"]
         if isinstance(node, Return): return [f"{p}return{(' ' + self._v(node.value)) if node.value else ''};"]
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}// string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}var {node.name} = {base}.ToUpper();']
+            if node.op == "lower" and node.name: return [f'{p}var {node.name} = {base}.ToLower();']
+            if node.op == "strip" and node.name: return [f'{p}var {node.name} = {base}.Trim();']
+            if node.op == "len" and node.name: return [f'{p}var {node.name} = {base}.Length;']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}var {node.name} = {base}.Replace({self._v(node.operands[1])}, {self._v(node.operands[2])});']
+            if node.op == "split" and len(node.operands) >= 2 and node.name:
+                return [f'{p}var {node.name} = {base}.Split({self._v(node.operands[1])});']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}var {node.name} = {base}.Contains({self._v(node.operands[1])});']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}var {node.name} = {base}.StartsWith({self._v(node.operands[1])});']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}var {node.name} = {base}.EndsWith({self._v(node.operands[1])});']
+            return [f"{p}// string_op: {node.op}"]
         if isinstance(node, EnvVar):
             if node.action == "get" and node.result_name: return [f'{p}var {node.result_name} = Environment.GetEnvironmentVariable("{node.name}");']
             if node.action == "set": return [f'{p}Environment.SetEnvironmentVariable("{node.name}", {self._v(node.value)});']
