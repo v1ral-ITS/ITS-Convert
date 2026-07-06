@@ -66,11 +66,10 @@ Each emitter handles: variables, print, input, if/elif/else, for/for-range/while
 npm install -g itsconvert
 node --version    # requires Node.js 18+
 python --version  # requires Python 3.11+
-python -m pip install pydantic rich typer  # same runtime deps as requirements.txt
 itsconvert languages
 ```
 
-The npm package is a thin launcher around the Python CLI in this repository, so you still need **Python 3.11+** and the Python runtime dependencies installed.
+The npm package is a thin launcher around the Python CLI in this repository, so you still need **Node.js 18+** and **Python 3.11+**. On first run, the launcher will tell you which Python dependencies to install if they are missing.
 
 ### From PyPI (when published)
 
@@ -267,10 +266,13 @@ pytest tests/ -v
 # 1. Log into npm
 npm login
 
-# 2. Review the package contents
+# 2. Keep the npm version aligned with pyproject.toml
+#    (for example, bump both files from 0.1.0 to 0.1.1 together)
+
+# 3. Review the package contents
 npm pack --dry-run
 
-# 3. Publish the package
+# 4. Publish the package
 npm publish
 ```
 

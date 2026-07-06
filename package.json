@@ -17,6 +17,9 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "prepublishOnly": "node -e \"require('fs').accessSync('bin/itsconvert.js')\""
+  },
   "keywords": [
     "translator",
     "cross-language",
