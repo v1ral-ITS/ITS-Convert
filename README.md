@@ -60,10 +60,12 @@ Each emitter handles: variables, print, input, if/elif/else, for/for-range/while
 
 ## Install
 
+ITS-Convert is a Python package. Install it with `pip` / `python -m pip` — not `npm`.
+
 ### From PyPI (when published)
 
 ```bash
-pip install itsconvert
+python -m pip install itsconvert
 ```
 
 ### From source
@@ -71,7 +73,7 @@ pip install itsconvert
 ```bash
 git clone https://github.com/v1ral-its/ITS-Convert.git
 cd ITS-Convert
-pip install -e .
+python -m pip install -e .
 ```
 
 ### Requirements
@@ -236,7 +238,7 @@ tests/
 # Clone and install with dev dependencies
 git clone https://github.com/v1ral-its/ITS-Convert.git
 cd ITS-Convert
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 
 # Run tests
 pytest tests/ -v
