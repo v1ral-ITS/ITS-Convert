@@ -69,7 +69,7 @@ python --version  # requires Python 3.11+
 itsconvert languages
 ```
 
-The npm package is a thin launcher around the Python CLI in this repository, so you still need **Node.js 18+** and **Python 3.11+**. If Python dependencies are missing, the launcher prints the exact `python -m pip install -r .../requirements.txt` command to run from the installed package.
+The npm package is a thin launcher around the Python CLI in this repository, so you still need **Node.js 18+** and **Python 3.11+**. If Python is not installed, install Python 3.11+ first. If Python dependencies are missing, the launcher prints the exact `python -m pip install -r .../requirements.txt` command to run from the installed package.
 
 ### From PyPI (when published)
 

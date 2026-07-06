@@ -9,7 +9,9 @@
   },
   "files": [
     "bin/itsconvert.js",
-    "itsconvert/**/*.py",
+    "itsconvert/*.py",
+    "itsconvert/packagers/*.py",
+    "itsconvert/translators/*.py",
     "README.md",
     "LICENSE",
     "requirements.txt"
