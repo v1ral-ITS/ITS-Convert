@@ -268,7 +268,7 @@ npm login
 # 2. Review the package contents
 npm pack --dry-run
 
-# 3. Publish your first public package
+# 3. Publish the package
 npm publish
 ```
 
