@@ -18,7 +18,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "prepublishOnly": "node -e \"const fs=require('fs');if(!fs.existsSync('bin/itsconvert.js')){console.error('Error: bin/itsconvert.js not found');process.exit(1);}\""
+    "prepublishOnly": "node ./scripts/validate-package.js"
   },
   "keywords": [
     "translator",

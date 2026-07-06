@@ -49,7 +49,7 @@ const dependencyCheck = spawnSync(command, [...baseArgs, "-c", "import pydantic,
 
 if (dependencyCheck.status !== 0) {
   console.error("ITS-Convert requires Python dependencies before the npm launcher can run.");
-  console.error(`Install them with:\n  ${commandLabel(command, baseArgs)} -m pip install pydantic rich typer`);
+  console.error(`Install them with:\n  ${commandLabel(command, baseArgs)} -m pip install -r ${path.join(packageRoot, "requirements.txt")}`);
   process.exit(dependencyCheck.status || 1);
 }
 
