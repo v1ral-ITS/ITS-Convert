@@ -39,7 +39,7 @@ class ScalaEmitter:
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for ({node.var} <- {s} until {e}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, ForEnumerate):
-            return [f"{p}for (({node.index_var}, {node.value_var}) <- {self._v(node.iterable)}.zipWithIndex) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+            return [f"{p}for (({node.value_var}, {node.index_var}) <- {self._v(node.iterable)}.zipWithIndex) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, ForKeys):
             return [f"{p}for ({node.var} <- {self._v(node.dict_value)}.keys) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):

@@ -38,7 +38,7 @@ class KotlinEmitter:
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for ({node.var} in {s} until {e}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, ForEnumerate):
-            return [f"{p}for (({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.withIndex().map {{ Pair(it.index, it.value) }}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+            return [f"{p}for (({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.withIndex()) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, ForKeys):
             return [f"{p}for ({node.var} in {self._v(node.dict_value)}.keys) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
