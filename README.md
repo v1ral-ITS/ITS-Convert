@@ -64,8 +64,9 @@ Each emitter handles: variables, print, input, if/elif/else, for/for-range/while
 
 ```bash
 npm install -g itsconvert
+node --version    # requires Node.js 18+
 python --version  # requires Python 3.11+
-python -m pip install pydantic rich typer
+python -m pip install pydantic rich typer  # same runtime deps as requirements.txt
 itsconvert languages
 ```
 

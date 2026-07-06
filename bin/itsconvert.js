@@ -35,7 +35,7 @@ function commandLabel(command, baseArgs) {
 
 const launcher = findPython();
 if (!launcher) {
-  console.error("ITS-Convert requires Python 3.11+ to run.");
+  console.error("ITS-Convert requires Python 3.11+ to run this npm package.");
   process.exit(1);
 }
 
