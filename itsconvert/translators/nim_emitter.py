@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -21,7 +21,7 @@ class NimEmitter:
         p = "  " * i
         if isinstance(node, Comment): return [f"{p}# {node.text}"]
         if isinstance(node, Assign): return [f"{p}let {node.name} = {self._v(node.value)}"]
-        if isinstance(node, AugAssign): return [f"{p}{node.name}.{self._augop(node.op)}({self._v(node.value)})"]
+        if isinstance(node, AugAssign): return [f"{p}{node.name} {node.op}= {self._v(node.value)}"]
         if isinstance(node, Print):
             return [f"{p}echo {', '.join(self._v(v) for v in node.values) if node.values else '\"\"'}"]
         if isinstance(node, Input):
@@ -38,6 +38,10 @@ class NimEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for {node.var} in {s}..<{e}:"] + self._body(node.body, i+1)
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for {node.index_var}, {node.value_var} in pairs({self._v(node.iterable)}):"] + self._body(node.body, i+1)
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var} in {self._v(node.dict_value)}.keys:"] + self._body(node.body, i+1)
         if isinstance(node, While):
             return [f"{p}while {self._cond(node.condition)}:"] + self._body(node.body, i+1)
         if isinstance(node, Break): return [f"{p}break"]
@@ -46,6 +50,23 @@ class NimEmitter:
         if isinstance(node, FunctionDef): return self._fn(node, i)
         if isinstance(node, Return): return [f"{p}return{(' ' + self._v(node.value)) if node.value else ''}"]
         if isinstance(node, Import): return [f"{p}import {node.module}"]
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}# string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}let {node.name} = {base}.toUpperAscii()']
+            if node.op == "lower" and node.name: return [f'{p}let {node.name} = {base}.toLowerAscii()']
+            if node.op == "strip" and node.name: return [f'{p}let {node.name} = {base}.strip()']
+            if node.op == "len" and node.name: return [f'{p}let {node.name} = {base}.len']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}let {node.name} = {base}.replace({self._v(node.operands[1])}, {self._v(node.operands[2])})']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.contains({self._v(node.operands[1])})']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.startsWith({self._v(node.operands[1])})']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}let {node.name} = {base}.endsWith({self._v(node.operands[1])})']
+            return [f"{p}# string_op: {node.op}"]
+        if isinstance(node, FileIONode): return self._file(node, p)
         if isinstance(node, EnvVar):
             if node.action == "get" and node.result_name: return [f"{p}let {node.result_name} = getEnv(\"{node.name}\")"]
             return [f"{p}# env: {node.action}"]
@@ -110,6 +131,16 @@ class NimEmitter:
         if n.action == "set" and n.key: return [f"{p}{nm}[{self._v(n.key)}] = {self._v(n.value)}"]
         if n.action == "len" and n.result_name: return [f"{p}let {n.result_name} = {nm}.len"]
         return [f"{p}# dict: {n.action}"]
+
+    def _file(self, n, p):
+        path = self._v(n.path)
+        if n.op == "read" and n.name: return [f'{p}let {n.name} = readFile({path})']
+        if n.op == "write" and n.content: return [f'{p}writeFile({path}, {self._v(n.content)})']
+        if n.op == "append" and n.content: return [f'{p}let _f = open({path}, fmAppend)', f'{p}_f.write({self._v(n.content)})', f'{p}_f.close()']
+        if n.op == "exists" and n.name: return [f'{p}let {n.name} = fileExists({path})']
+        if n.op == "mkdir": return [f'{p}createDir({path})']
+        if n.op == "delete": return [f'{p}removeFile({path})']
+        return [f"{p}# file: {n.op}"]
 
     def _body(self, nodes, i): return [l for n in nodes for l in self._n(n, i)]
     def _args(self, a): return " ".join(self._v(x) for x in a)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -42,6 +42,10 @@ class VLangEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for {node.var} in {s}..{e} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for {node.index_var}, {node.value_var} in {self._v(node.iterable)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var}, _ in {self._v(node.dict_value)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
             return [f"{p}for {node.var} in {self._v(node.iterable)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
@@ -66,6 +70,7 @@ class VLangEmitter:
         if isinstance(node, Raise): return [f"{p}panic({self._v(node.message) if node.message else '\"Error\"'})"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
+        if isinstance(node, FileIONode): return self._file(node, p)
         if isinstance(node, Assert): return [f"{p}assert {self._cond(node.condition)}"]
         if isinstance(node, RawBlock): return [f"{p}// raw ({node.language})"] + [f"{p}// {l}" for l in node.code.split("\n")]
         return [f"{p}// FIXME: {node.type}"]
@@ -114,6 +119,14 @@ class VLangEmitter:
         if n.action == "keys" and n.result_name: return [f"{p}{n.result_name} := {nm}.keys()"]
         if n.action == "len" and n.result_name: return [f"{p}{n.result_name} := {nm}.len"]
         return [f"{p}// dict: {n.action}"]
+
+    def _file(self, n, p):
+        path = self._v(n.path)
+        if n.op == "read" and n.name: return [f'{p}{n.name} := os.read_file({path}) or {{ "" }}']
+        if n.op == "write" and n.content: return [f'{p}os.write_file({path}, {self._v(n.content)}) or {{ }}']
+        if n.op == "exists" and n.name: return [f'{p}{n.name} := os.exists({path})']
+        if n.op == "mkdir": return [f'{p}os.mkdir_all({path}) or {{ }}']
+        return [f"{p}// file: {n.op}"]
 
     def _body(self, nodes, i): return [l for n in nodes for l in self._n(n, i)]
     def _args(self, a): return " ".join(self._v(x) for x in a)

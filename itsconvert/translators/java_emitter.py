@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -45,6 +45,11 @@ class JavaEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for (int {node.var} = {s}; {node.var} < {e}; {node.var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for (int {node.index_var} = 0; {node.index_var} < {self._v(node.iterable)}.size(); {node.index_var}++) {{",
+                    f"{p}    var {node.value_var} = {self._v(node.iterable)}.get({node.index_var});"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for (var {node.var} : {self._v(node.dict_value)}.keySet()) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
             return [f"{p}for (var {node.var} : {self._v(node.iterable)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
@@ -53,6 +58,25 @@ class JavaEmitter:
         if isinstance(node, Continue): return [f"{p}continue;"]
         if isinstance(node, Pass): return [f"{p}// pass"]
         if isinstance(node, Return): return [f"{p}return{(' ' + self._v(node.value)) if node.value else ''};"]
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}// string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}String {node.name} = {base}.toUpperCase();']
+            if node.op == "lower" and node.name: return [f'{p}String {node.name} = {base}.toLowerCase();']
+            if node.op == "strip" and node.name: return [f'{p}String {node.name} = {base}.strip();']
+            if node.op == "len" and node.name: return [f'{p}int {node.name} = {base}.length();']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}String {node.name} = {base}.replace({self._v(node.operands[1])}, {self._v(node.operands[2])});']
+            if node.op == "split" and len(node.operands) >= 2 and node.name:
+                return [f'{p}String[] {node.name} = {base}.split({self._v(node.operands[1])});']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}boolean {node.name} = {base}.contains({self._v(node.operands[1])});']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}boolean {node.name} = {base}.startsWith({self._v(node.operands[1])});']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}boolean {node.name} = {base}.endsWith({self._v(node.operands[1])});']
+            return [f"{p}// string_op: {node.op}"]
+        if isinstance(node, FileIONode): return self._file(node, p)
         if isinstance(node, EnvVar):
             if node.action == "get" and node.result_name: return [f'{p}String {node.result_name} = System.getenv("{node.name}");']
             return [f"{p}// env: {node.action}"]
@@ -129,6 +153,15 @@ class JavaEmitter:
         if n.action == "values" and n.result_name: return [f"{p}var {n.result_name} = {nm}.values();"]
         if n.action == "len" and n.result_name: return [f"{p}int {n.result_name} = {nm}.size();"]
         return [f"{p}// dict: {n.action}"]
+
+    def _file(self, n, p):
+        path = self._v(n.path)
+        if n.op == "read" and n.name: return [f'{p}String {n.name} = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get({path})));']
+        if n.op == "write" and n.content: return [f'{p}java.nio.file.Files.write(java.nio.file.Paths.get({path}), {self._v(n.content)}.getBytes());']
+        if n.op == "exists": return [f'{p}boolean {n.name or "_exists"} = new java.io.File({path}).exists();']
+        if n.op == "mkdir": return [f'{p}new java.io.File({path}).mkdirs();']
+        if n.op == "delete": return [f'{p}new java.io.File({path}).delete();']
+        return [f"{p}// file: {n.op}"]
 
     def _body(self, nodes, i): return [l for n in nodes for l in self._n(n, i)]
     def _v(self, v):

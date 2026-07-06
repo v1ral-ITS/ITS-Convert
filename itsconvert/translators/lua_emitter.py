@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -41,6 +41,10 @@ class LuaEmitter:
             s, e = self._v(node.start), self._v(node.stop)
             st = f", {self._v(node.step)}" if node.step else ""
             return [f"{p}for {node.var} = {s}, {e} - 1{st} do"] + self._body(node.body, i+1) + [f"{p}end"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for {node.index_var}, {node.value_var} in ipairs({self._v(node.iterable)}) do"] + self._body(node.body, i+1) + [f"{p}end"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var}, _ in pairs({self._v(node.dict_value)}) do"] + self._body(node.body, i+1) + [f"{p}end"]
         if isinstance(node, While):
             return [f"{p}while {self._cond(node.condition)} do"] + self._body(node.body, i+1) + [f"{p}end"]
         if isinstance(node, Break): return [f"{p}break"]
@@ -69,6 +73,7 @@ class LuaEmitter:
         if isinstance(node, Raise): return [f"{p}error({self._v(node.message) if node.message else '\"Error\"'})"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
+        if isinstance(node, FileIONode): return self._file(node, p)
         if isinstance(node, Assert): return [f"{p}assert({self._cond(node.condition)}, {self._v(node.message) if node.message else '\"Assertion failed\"'})"]
         if isinstance(node, RawBlock): return [f"{p}-- raw ({node.language})"] + [f"{p}-- {l}" for l in node.code.split("\n")]
         return [f"{p}-- FIXME: {node.type}"]
@@ -119,6 +124,22 @@ class LuaEmitter:
         if n.action == "values" and n.result_name: return [f"{p}local {n.result_name} = {{}}; for _,v in pairs({nm}) do table.insert({n.result_name}, v) end"]
         if n.action == "len" and n.result_name: return [f"{p}local {n.result_name} = 0; for _ in pairs({nm}) do {n.result_name} = {n.result_name} + 1 end"]
         return [f"{p}-- dict: {n.action}"]
+
+    def _file(self, n, p):
+        path = self._v(n.path)
+        if n.op == "read" and n.name:
+            return [f'{p}local _fh = io.open({path}, "r")',
+                    f'{p}{n.name} = _fh:read("*all")',
+                    f'{p}_fh:close()']
+        if n.op == "write" and n.content:
+            return [f'{p}local _fw = io.open({path}, "w")',
+                    f'{p}_fw:write({self._v(n.content)})',
+                    f'{p}_fw:close()']
+        if n.op == "exists" and n.name:
+            return [f'{p}local _fe = io.open({path}, "r")',
+                    f'{p}local {n.name} = (_fe ~= nil)',
+                    f'{p}if _fe then _fe:close() end']
+        return [f"{p}-- file: {n.op}"]
 
     def _body(self, nodes, i): return [l for n in nodes for l in self._n(n, i)]
     def _args(self, a): return " ".join(self._v(x) for x in a)

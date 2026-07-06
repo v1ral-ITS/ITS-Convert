@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -46,6 +46,12 @@ class CppEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for (int {node.var} = {s}; {node.var} < {e}; {node.var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}auto& _{node.value_var}_vec = {self._v(node.iterable)};",
+                    f"{p}for (size_t {node.index_var} = 0; {node.index_var} < _{node.value_var}_vec.size(); ++{node.index_var}) {{",
+                    f"{p}    auto& {node.value_var} = _{node.value_var}_vec[{node.index_var}];"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for (auto& [{node.var}, _v] : {self._v(node.dict_value)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
             return [f"{p}for (auto& {node.var} : {self._v(node.iterable)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):

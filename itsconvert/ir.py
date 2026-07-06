@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal, Union
 from pydantic import BaseModel, Field
 
-Language = Literal["py", "sh", "ps1", "cmd", "js", "rb", "pl", "go", "rs", "lua", "ts", "php", "java", "c", "cpp", "cs", "swift", "kt", "dart", "pyi", "r", "scala", "nim", "zig", "v"]
+Language = Literal["py", "sh", "ps1", "cmd", "js", "rb", "pl", "go", "rs", "lua", "ts", "php", "java", "c", "cpp", "cs", "swift", "kt", "dart", "pyi", "r", "scala", "nim", "zig", "v", "jl", "hs", "ex", "fs"]
 
 ValueType = Literal["string", "int", "float", "bool", "null", "var", "list", "dict", "binop", "unaryop", "call", "subscript", "attr", "slice", "fstring"]
 CompareOp = Literal["==", "!=", ">", "<", ">=", "<="]

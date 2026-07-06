@@ -355,6 +355,27 @@ class TestAllEmitters:
         assert "module main" in result
         assert "fn main()" in result
 
+    def test_julia_emitter(self):
+        result = self.emitters["jl"].emit(self.ir)
+        assert "println" in result
+        assert "function" in result
+
+    def test_haskell_emitter(self):
+        result = self.emitters["hs"].emit(self.ir)
+        assert "module Main where" in result
+        assert "main :: IO ()" in result
+        assert "putStrLn" in result
+
+    def test_elixir_emitter(self):
+        result = self.emitters["ex"].emit(self.ir)
+        assert "defmodule Main" in result
+        assert "IO.puts" in result
+
+    def test_fsharp_emitter(self):
+        result = self.emitters["fs"].emit(self.ir)
+        assert "[<EntryPoint>]" in result
+        assert "printfn" in result
+
     def test_all_emitters_produce_output(self):
         for lang, emitter in self.emitters.items():
             result = emitter.emit(self.ir)
@@ -376,4 +397,101 @@ class TestUtilsExtended:
         assert infer_language(Path("test.dart")) == "dart"
         assert infer_language(Path("test.nim")) == "nim"
         assert infer_language(Path("test.zig")) == "zig"
+        assert infer_language(Path("test.jl")) == "jl"
+        assert infer_language(Path("test.hs")) == "hs"
+        assert infer_language(Path("test.ex")) == "ex"
+        assert infer_language(Path("test.fs")) == "fs"
+
+
+# --- Emitter Improvement Tests ---
+
+class TestEmitterImprovements:
+    """Test specific emitter bug fixes and improvements."""
+
+    def test_js_not_equal_operator(self):
+        """JS emitter must produce !== not !===."""
+        from itsconvert.translators.js_emitter import JSEmitter
+        ir = ScriptIR(source_language="py", nodes=[
+            If(condition=Condition(left=Value(kind="var", value="x"),
+                                   op="!=",
+                                   right=Value(kind="int", value=0)),
+               then_body=[Print(values=[Value(kind="string", value="nonzero")])])
+        ])
+        result = JSEmitter().emit(ir)
+        assert "!==" in result
+        assert "!===" not in result
+
+    def test_nim_aug_assign(self):
+        """Nim emitter must produce x += 1 not x.add(1)."""
+        from itsconvert.translators.nim_emitter import NimEmitter
+        from itsconvert.ir import AugAssign
+        ir = ScriptIR(source_language="py", nodes=[
+            AugAssign(name="x", op="+", value=Value(kind="int", value=1))
+        ])
+        result = NimEmitter().emit(ir)
+        assert "x += 1" in result
+        assert ".add(" not in result
+
+    def test_go_fstring_sprintf(self):
+        """Go emitter must use fmt.Sprintf for fstrings."""
+        from itsconvert.translators.go_emitter import GoEmitter
+        fstr = Value(kind="fstring", parts=[
+            Value(kind="string", value="Hello, "),
+            Value(kind="var", value="name"),
+            Value(kind="string", value="!"),
+        ])
+        ir = ScriptIR(source_language="py", nodes=[Print(values=[fstr])])
+        result = GoEmitter().emit(ir)
+        assert "fmt.Sprintf" in result
+        assert "%v" in result
+
+    def test_rust_fstring_format_macro(self):
+        """Rust emitter must use format!() for fstrings."""
+        from itsconvert.translators.rs_emitter import RustEmitter
+        fstr = Value(kind="fstring", parts=[
+            Value(kind="string", value="Hello, "),
+            Value(kind="var", value="name"),
+            Value(kind="string", value="!"),
+        ])
+        ir = ScriptIR(source_language="py", nodes=[Print(values=[fstr])])
+        result = RustEmitter().emit(ir)
+        assert "format!" in result
+
+    def test_js_fstring_template_literal(self):
+        """JS emitter must use template literals (backtick) for fstrings."""
+        from itsconvert.translators.js_emitter import JSEmitter
+        fstr = Value(kind="fstring", parts=[
+            Value(kind="string", value="Hello, "),
+            Value(kind="var", value="name"),
+            Value(kind="string", value="!"),
+        ])
+        ir = ScriptIR(source_language="py", nodes=[Print(values=[fstr])])
+        result = JSEmitter().emit(ir)
+        assert "`" in result
+        assert "${name}" in result
+
+    def test_for_enumerate_all_emitters(self):
+        """All emitters must handle ForEnumerate without FIXME."""
+        from itsconvert.translators import available_emitters, get_emitter
+        from itsconvert.ir import ForEnumerate
+        ir = ScriptIR(source_language="py", nodes=[
+            ForEnumerate(index_var="i", value_var="x",
+                         iterable=Value(kind="var", value="items"),
+                         body=[Print(values=[Value(kind="var", value="x")])])
+        ])
+        for lang in available_emitters():
+            result = get_emitter(lang).emit(ir)
+            assert "FIXME: for_enumerate" not in result, f"{lang} has FIXME for ForEnumerate"
+
+    def test_for_keys_all_emitters(self):
+        """All emitters must handle ForKeys without FIXME."""
+        from itsconvert.translators import available_emitters, get_emitter
+        from itsconvert.ir import ForKeys
+        ir = ScriptIR(source_language="py", nodes=[
+            ForKeys(var="k", dict_value=Value(kind="var", value="d"),
+                    body=[Print(values=[Value(kind="var", value="k")])])
+        ])
+        for lang in available_emitters():
+            result = get_emitter(lang).emit(ir)
+            assert "FIXME: for_keys" not in result, f"{lang} has FIXME for ForKeys"
 

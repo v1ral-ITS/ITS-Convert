@@ -62,6 +62,14 @@ class CMDEmitter:
             return self._emit_if(node, indent)
         if isinstance(node, ForRange):
             return self._emit_for_range(node, indent)
+        if isinstance(node, ForEnumerate):
+            prefix = "    " * indent
+            body = self._emit_body(node.body, indent + 1)
+            return [f"{prefix}REM enumerate loop (index={node.index_var}, value={node.value_var})"] + body
+        if isinstance(node, ForKeys):
+            prefix = "    " * indent
+            body = self._emit_body(node.body, indent + 1)
+            return [f"{prefix}REM for keys in {self._val(node.dict_value)}: (CMD has no native dict iteration)"] + body
         if isinstance(node, For):
             return self._emit_for(node, indent)
         if isinstance(node, Break):

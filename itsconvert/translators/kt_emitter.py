@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -37,6 +37,10 @@ class KotlinEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for ({node.var} in {s} until {e}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for (({node.index_var}, {node.value_var}) in {self._v(node.iterable)}.withIndex().map {{ Pair(it.index, it.value) }}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for ({node.var} in {self._v(node.dict_value)}.keys) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, For):
             return [f"{p}for ({node.var} in {self._v(node.iterable)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
@@ -45,6 +49,22 @@ class KotlinEmitter:
         if isinstance(node, Continue): return [f"{p}continue"]
         if isinstance(node, Pass): return [f"{p}// pass"]
         if isinstance(node, Return): return [f"{p}return{(' ' + self._v(node.value)) if node.value else ''}"]
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}// string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}val {node.name} = {base}.uppercase()']
+            if node.op == "lower" and node.name: return [f'{p}val {node.name} = {base}.lowercase()']
+            if node.op == "strip" and node.name: return [f'{p}val {node.name} = {base}.trim()']
+            if node.op == "len" and node.name: return [f'{p}val {node.name} = {base}.length']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}val {node.name} = {base}.replace({self._v(node.operands[1])}, {self._v(node.operands[2])})']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}val {node.name} = {base}.contains({self._v(node.operands[1])})']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}val {node.name} = {base}.startsWith({self._v(node.operands[1])})']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}val {node.name} = {base}.endsWith({self._v(node.operands[1])})']
+            return [f"{p}// string_op: {node.op}"]
         if isinstance(node, EnvVar):
             if node.action == "get" and node.result_name: return [f'{p}val {node.result_name} = System.getenv("{node.name}")']
             return [f"{p}// env: {node.action}"]

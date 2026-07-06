@@ -181,15 +181,15 @@ class JSEmitter:
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "attr" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}.{self._vs(v.parts[1])}"
         if v.kind == "fstring" and v.parts:
-            parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value).replace("`", "\\`") for p in v.parts]
+            return "`" + "".join(parts) + "`"
         return repr(v.value)
 
     def _s(self, s: str) -> str: return repr(s)
     def _vs(self, v: Value) -> str: s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
 
     def _cond(self, c: Condition) -> str:
-        m = {"==": "===", "!=": "!===", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
+        m = {"==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         o = m.get(c.op, c.op)
         if c.right.kind == "null": return f"{self._v(c.left)} === null"
         return f"{self._v(c.left)} {o} {self._v(c.right)}"

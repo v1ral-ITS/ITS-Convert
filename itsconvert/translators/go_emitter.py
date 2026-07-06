@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, MultiAssign, AugAssign, Print, Input, Command, Exit,
-    If, ElifBranch, For, ForRange, While,
+    If, ElifBranch, For, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, Pass, FunctionDef, Return, Import,
     StringOpNode, FileIONode, EnvVar, Argv, TryCatch, Raise,
     ListOp, DictOp, Assert, RawBlock,
@@ -34,6 +34,7 @@ class GoEmitter:
         if isinstance(node, Command): imports.add("os/exec")
         if isinstance(node, EnvVar): imports.add("os")
         if isinstance(node, FileIONode): imports.add("os")
+        if isinstance(node, StringOpNode): imports.add("strings")
         if isinstance(node, Assert): imports.add("fmt")
         if isinstance(node, Argv): imports.add("os")
         if isinstance(node, FunctionDef):
@@ -43,7 +44,13 @@ class GoEmitter:
             for eb in node.elif_branches:
                 for n in eb.body: self._collect_imports(n, imports)
             for n in node.else_body: self._collect_imports(n, imports)
+        if isinstance(node, TryCatch):
+            for n in node.try_body: self._collect_imports(n, imports)
+            for n in node.catch_body: self._collect_imports(n, imports)
+            for n in node.finally_body: self._collect_imports(n, imports)
         if isinstance(node, (For, ForRange, While)):
+            for n in node.body: self._collect_imports(n, imports)
+        if isinstance(node, (ForEnumerate, ForKeys)):
             for n in node.body: self._collect_imports(n, imports)
 
     def _n(self, node, i):
@@ -81,6 +88,10 @@ class GoEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for {node.var} := {s}; {node.var} < {e}; {node.var}++ {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}for {node.index_var}, {node.value_var} := range {self._v(node.iterable)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}for {node.var} := range {self._v(node.dict_value)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, While):
             return [f"{p}for {self._cond(node.condition)} {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break"]
@@ -99,6 +110,24 @@ class GoEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}{node.name} := os.Args[{node.index + 1}]"]
             if node.action == "count" and node.name: return [f"{p}{node.name} := len(os.Args)"]
             return [f"{p}// argv: {node.action}"]
+        if isinstance(node, StringOpNode):
+            if not node.operands: return [f"{p}// string_op: {node.op}"]
+            base = self._v(node.operands[0])
+            if node.op == "upper" and node.name: return [f'{p}{node.name} := strings.ToUpper({base})']
+            if node.op == "lower" and node.name: return [f'{p}{node.name} := strings.ToLower({base})']
+            if node.op == "strip" and node.name: return [f'{p}{node.name} := strings.TrimSpace({base})']
+            if node.op == "len" and node.name: return [f'{p}{node.name} := len({base})']
+            if node.op == "replace" and len(node.operands) >= 3 and node.name:
+                return [f'{p}{node.name} := strings.ReplaceAll({base}, {self._v(node.operands[1])}, {self._v(node.operands[2])})']
+            if node.op == "split" and len(node.operands) >= 2 and node.name:
+                return [f'{p}{node.name} := strings.Split({base}, {self._v(node.operands[1])})']
+            if node.op == "contains" and len(node.operands) >= 2 and node.name:
+                return [f'{p}{node.name} := strings.Contains({base}, {self._v(node.operands[1])})']
+            if node.op == "startswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}{node.name} := strings.HasPrefix({base}, {self._v(node.operands[1])})']
+            if node.op == "endswith" and len(node.operands) >= 2 and node.name:
+                return [f'{p}{node.name} := strings.HasSuffix({base}, {self._v(node.operands[1])})']
+            return [f"{p}// string_op: {node.op}"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, FileIONode): return self._file(node, p)
@@ -186,8 +215,17 @@ class GoEmitter:
             return f"({m.get(os, os)}{self._v(x)})"
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "fstring" and v.parts:
-            parts = [f"{{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            fmt_str = ""
+            args = []
+            for p in v.parts:
+                if p.kind == "string":
+                    fmt_str += str(p.value).replace("%", "%%")
+                else:
+                    fmt_str += "%v"
+                    args.append(self._v(p))
+            if args:
+                return f'fmt.Sprintf("{fmt_str}", {", ".join(args)})'
+            return repr(fmt_str)
         return repr(v.value)
     def _vs(self, v): s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
     def _cond(self, c):

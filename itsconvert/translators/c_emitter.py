@@ -3,7 +3,7 @@ from __future__ import annotations
 from itsconvert.ir import (
     ScriptIR, IRNode, Value, Condition,
     Comment, Assign, AugAssign, Print, Input, Exit,
-    If, ElifBranch, ForRange, While,
+    If, ElifBranch, ForRange, ForEnumerate, ForKeys, While,
     Break, Continue, FunctionDef, Return, Import,
     StringOpNode, EnvVar, Argv, TryCatch, Raise,
     ListOp, Assert, RawBlock,
@@ -56,6 +56,12 @@ class CEmitter:
         if isinstance(node, ForRange):
             s, e = self._v(node.start), self._v(node.stop)
             return [f"{p}for (int {node.var} = {s}; {node.var} < {e}; {node.var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForEnumerate):
+            return [f"{p}/* enumerate: iterate with index {node.index_var} */",
+                    f"{p}for (int {node.index_var} = 0; {node.index_var} < (int)(sizeof({self._v(node.iterable)})/sizeof({self._v(node.iterable)}[0])); {node.index_var}++) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
+        if isinstance(node, ForKeys):
+            return [f"{p}/* ForKeys: iterate over dict keys {node.var} */",
+                    f"{p}// dict key iteration not natively supported in C; use manual loop"] + self._body(node.body, i+1)
         if isinstance(node, While):
             return [f"{p}while ({self._cond(node.condition)}) {{"] + self._body(node.body, i+1) + [f"{p}}}"]
         if isinstance(node, Break): return [f"{p}break;"]
