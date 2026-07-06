@@ -60,6 +60,17 @@ Each emitter handles: variables, print, input, if/elif/else, for/for-range/while
 
 ## Install
 
+### From npm
+
+```bash
+npm install -g itsconvert
+node --version    # requires Node.js 18+
+python --version  # requires Python 3.11+
+itsconvert languages
+```
+
+The npm package is a thin launcher around the Python CLI in this repository, so you still need **Node.js 18+** and **Python 3.11+**. If Python is not installed, install Python 3.11+ first. If Python dependencies are missing, the launcher prints the exact `python -m pip install -r .../requirements.txt` command to run from the installed package.
+
 ### From PyPI (when published)
 
 ```bash
@@ -248,6 +259,23 @@ pytest tests/ -v
 # 4. Add file extension to utils.py mapping
 # 5. Add tests in tests/test_convert.py
 ```
+
+## Publish to npm
+
+```bash
+# 1. Log into npm
+npm login
+
+# 2. Keep the npm version aligned with pyproject.toml
+#    (for example, bump both files from 0.1.0 to 0.1.1 together)
+
+# 3. Review the package contents
+npm pack --dry-run
+
+# 4. Publish the package
+npm publish
+```
+
 
 ## License
 
