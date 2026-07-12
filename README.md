@@ -1,22 +1,42 @@
 <div align="center">
 
-# ITS-Convert
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,100:a855f7&height=160&section=header&text=ITS-Convert&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Translate%20automation%20scripts%20across%2025%20languages&descAlignY=58&descSize=16" width="100%" />
 
-**Translate automation scripts across 25 languages.**
+<br/>
 
-Parse once. Emit anywhere.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-6366f1?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-a855f7?style=for-the-badge)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-56%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Languages](https://img.shields.io/badge/target%20languages-25-f59e0b?style=for-the-badge)](#supported-languages)
+[![PyPI](https://img.shields.io/badge/PyPI-itsconvert-3b82f6?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/itsconvert/)
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-56%20passing-brightgreen.svg)](tests/)
+<br/>
+
+> **Parse once. Emit anywhere.**
+> Feed it a Python, Bash, PowerShell, or CMD script — get back idiomatic code in any of 25 languages.
+
+<br/>
 
 </div>
 
 ---
 
-ITS-Convert is a cross-language script translator built on an Intermediate Representation (IR). Feed it a Python script (or Bash, PowerShell, CMD) and it emits idiomatic code in **25 target languages** -- from JavaScript to Rust, Go to Scala, Lua to Zig.
+## Table of Contents
+
+- [How it works](#how-it-works)
+- [Supported Languages](#supported-languages)
+- [Install](#install)
+- [Usage](#usage)
+- [Examples](#examples)
+- [Architecture](#architecture)
+- [IR Node Types](#ir-node-types)
+- [Development](#development)
+
+---
 
 ## How it works
+
+Every source file is parsed into a **language-agnostic IR**, then an emitter walks the IR and produces idiomatic target-language syntax.
 
 ```
   Source Script          IR (26+ node types)          Target Script
@@ -33,34 +53,68 @@ ITS-Convert is a cross-language script translator built on an Intermediate Repre
                       └──────────────────┘
 ```
 
-Every source file is parsed into a language-agnostic IR, then an emitter walks the IR and produces target-language code with idiomatic syntax -- `console.log()` for JS, `println!()` for Rust, `fmt.Println()` for Go, `cat()` for R, etc.
+`console.log()` for JS, `println!()` for Rust, `fmt.Println()` for Go, `cat()` for R — each emitter produces **language-native** output, not transliterated Python.
 
-## Supported languages
+---
 
-### Parsers (source languages)
+## Supported Languages
+
+### 📥 Parsers (source)
 
 | Language | Extension | Parser |
 |----------|-----------|--------|
-| Python   | `.py`     | Full AST parser via `ast` module |
-| Bash     | `.sh`     | Heuristic line-based parser |
+| Python | `.py` | Full AST parser via `ast` module |
+| Bash | `.sh` | Heuristic line-based parser |
 | PowerShell | `.ps1` | Heuristic line-based parser |
 | CMD / Batch | `.cmd`, `.bat` | Heuristic line-based parser |
 
-### Emitters (target languages)
+### 📤 Emitters (targets)
 
-| | | | | |
-|---|---|---|---|---|
-| **Python** | **Bash** | **PowerShell** | **CMD** | **JavaScript** |
-| **TypeScript** | **Ruby** | **Perl** | **Lua** | **PHP** |
-| **Go** | **Rust** | **Java** | **C** | **C++** |
-| **C#** | **Swift** | **Kotlin** | **Dart** | **R** |
-| **Scala** | **Nim** | **Zig** | **V** | |
+<table>
+  <tr>
+    <td align="center">🐍<br/><b>Python</b></td>
+    <td align="center">🐚<br/><b>Bash</b></td>
+    <td align="center">🪟<br/><b>PowerShell</b></td>
+    <td align="center">⬛<br/><b>CMD</b></td>
+    <td align="center">🟨<br/><b>JavaScript</b></td>
+  </tr>
+  <tr>
+    <td align="center">🔷<br/><b>TypeScript</b></td>
+    <td align="center">💎<br/><b>Ruby</b></td>
+    <td align="center">🐪<br/><b>Perl</b></td>
+    <td align="center">🌙<br/><b>Lua</b></td>
+    <td align="center">🐘<br/><b>PHP</b></td>
+  </tr>
+  <tr>
+    <td align="center">🐹<br/><b>Go</b></td>
+    <td align="center">🦀<br/><b>Rust</b></td>
+    <td align="center">☕<br/><b>Java</b></td>
+    <td align="center">⚙️<br/><b>C</b></td>
+    <td align="center">⚙️<br/><b>C++</b></td>
+  </tr>
+  <tr>
+    <td align="center">🔷<br/><b>C#</b></td>
+    <td align="center">🍎<br/><b>Swift</b></td>
+    <td align="center">🎯<br/><b>Kotlin</b></td>
+    <td align="center">🎯<br/><b>Dart</b></td>
+    <td align="center">📊<br/><b>R</b></td>
+  </tr>
+  <tr>
+    <td align="center">♠️<br/><b>Scala</b></td>
+    <td align="center">👑<br/><b>Nim</b></td>
+    <td align="center">⚡<br/><b>Zig</b></td>
+    <td align="center">✅<br/><b>V</b></td>
+    <td></td>
+  </tr>
+</table>
 
-Each emitter handles: variables, print, input, if/elif/else, for/for-range/while, break/continue, functions, return, environment variables, CLI arguments, try/catch, lists, dicts, asserts, and file I/O (where the target language supports it).
+Each emitter handles: variables, print, input, if/elif/else, for/for-range/while, break/continue, functions, return, environment variables, CLI arguments, try/catch, lists, dicts, asserts, and file I/O.
+
+---
 
 ## Install
 
-### From PyPI (when published)
+### From PyPI
 
 ```bash
 pip install itsconvert
@@ -74,45 +128,36 @@ cd ITS-Convert
 pip install -e .
 ```
 
-### Requirements
+> **Requires:** Python 3.11+ · Dependencies auto-installed: `pydantic`, `rich`, `typer`
 
-- Python 3.11+
-- Dependencies (auto-installed): `pydantic`, `rich`, `typer`
+---
 
 ## Usage
 
-### List available languages
-
 ```bash
+# List all supported target languages
 itsconvert languages
-```
 
-### Inspect a script's IR
-
-```bash
+# Inspect the IR of any script
 itsconvert inspect examples/demo.py
-```
 
-### Translate to any target language
-
-```bash
+# Translate to any target language
 itsconvert translate examples/demo.py --to go
 itsconvert translate examples/demo.py --to rust
 itsconvert translate examples/demo.py --to js
 itsconvert translate examples/demo.py --to ruby -o build/demo.rb
-```
 
-### Package as executable
-
-```bash
+# Package as executable
 itsconvert build build/demo.py --builder pyinstaller
 itsconvert build build/demo.sh --builder shc
 itsconvert build build/demo.ps1 --builder wrapper
 ```
 
+---
+
 ## Examples
 
-Translate the bundled demo script into every language:
+Translate into every language at once:
 
 ```bash
 for lang in py sh ps1 cmd js ts rb pl lua php go rs java c cpp cs swift kt dart r scala nim zig v; do
@@ -120,15 +165,21 @@ for lang in py sh ps1 cmd js ts rb pl lua php go rs java c cpp cs swift kt dart 
 done
 ```
 
-### Quick output comparison
+### Output comparison
 
-**Python (source):**
+<table>
+<tr><th>Python (source)</th><th>Go</th><th>Rust</th></tr>
+<tr>
+<td>
+
 ```python
 name = "World"
 print(f"Hello, {name}!")
 ```
 
-**Go:**
+</td>
+<td>
+
 ```go
 package main
 
@@ -140,13 +191,22 @@ func main() {
 }
 ```
 
-**Rust:**
+</td>
+<td>
+
 ```rust
 fn main() {
     let mut name = String::from("World");
     println!("Hello, {}!", name.clone());
 }
 ```
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary>See Ruby, Lua, and TypeScript output</summary>
 
 **Ruby:**
 ```ruby
@@ -160,7 +220,20 @@ local name = "World"
 print("Hello, " .. tostring(name) .. "!")
 ```
 
+**TypeScript:**
+```typescript
+let name: string = "World";
+console.log(`Hello, ${name}!`);
+```
+
+</details>
+
+---
+
 ## Architecture
+
+<details>
+<summary>View full project structure</summary>
 
 ```
 itsconvert/
@@ -175,67 +248,50 @@ itsconvert/
 │   ├── sh_parser.py       # Bash heuristic parser
 │   ├── ps1_parser.py      # PowerShell heuristic parser
 │   ├── cmd_parser.py      # CMD heuristic parser
-│   ├── py_emitter.py      # Python emitter (round-trip)
-│   ├── sh_emitter.py      # Bash emitter
-│   ├── ps1_emitter.py     # PowerShell emitter
-│   ├── cmd_emitter.py     # CMD/batch emitter
-│   ├── js_emitter.py      # JavaScript emitter
-│   ├── ts_emitter.py      # TypeScript emitter
-│   ├── rb_emitter.py      # Ruby emitter
-│   ├── pl_emitter.py      # Perl emitter
-│   ├── lua_emitter.py     # Lua emitter
-│   ├── php_emitter.py     # PHP emitter
-│   ├── go_emitter.py      # Go emitter (package main + auto-imports)
-│   ├── rs_emitter.py      # Rust emitter (fn main + Vec/HashMap)
-│   ├── java_emitter.py    # Java emitter (public class Main)
-│   ├── c_emitter.py       # C emitter (#include + printf)
-│   ├── cpp_emitter.py     # C++ emitter (iostream + auto)
-│   ├── cs_emitter.py      # C# emitter (var + Dictionary)
-│   ├── swift_emitter.py   # Swift emitter (import Foundation)
-│   ├── kt_emitter.py      # Kotlin emitter (fun main)
-│   ├── dart_emitter.py    # Dart emitter (dart:io)
-│   ├── r_emitter.py       # R emitter (cat + <-)
-│   ├── scala_emitter.py   # Scala emitter (object Main)
-│   ├── nim_emitter.py     # Nim emitter (echo + for..in)
-│   ├── zig_emitter.py     # Zig emitter (@import + pub fn main)
-│   └── v_emitter.py       # V emitter (module main + <<)
+│   ├── [lang]_emitter.py  # One emitter per target language (25 total)
 ├── packagers/
 │   └── __init__.py        # PyInstaller, Nuitka, ps2exe, shc, wrapper
 examples/
-├── demo.py                # Full demo (imports, f-strings, try/catch, env)
-├── demo.sh                # Bash demo
-└── demo.ps1               # PowerShell demo
+├── demo.py
+├── demo.sh
+└── demo.ps1
 tests/
-└── test_convert.py        # 56 tests (parsers, emitters, round-trip, utils)
+└── test_convert.py        # 56 tests
 ```
 
-## IR node types
+</details>
+
+---
+
+## IR Node Types
 
 | Category | Nodes |
 |----------|-------|
 | **Control flow** | `If`, `ElifBranch`, `For`, `ForRange`, `ForEnumerate`, `ForKeys`, `While`, `Break`, `Continue`, `Pass` |
 | **Functions** | `FunctionDef` (params, defaults, type hints, varargs), `Return` |
 | **Error handling** | `TryCatch`, `Raise`, `Assert` |
-| **I/O** | `Print`, `Input`, `FileIONode` (read/write/append/exists/delete/mkdir), `Command` |
-| **Data structures** | `ListOp` (create/append/pop/sort/join/contains/len), `DictOp` (create/get/set/keys/values/contains) |
+| **I/O** | `Print`, `Input`, `FileIONode`, `Command` |
+| **Data structures** | `ListOp`, `DictOp` |
 | **Variables** | `Assign`, `MultiAssign`, `AugAssign`, `EnvVar`, `Argv` |
-| **Strings** | `StringOpNode` (upper/lower/strip/replace/split/join/len/contains/startswith/endswith) |
+| **Strings** | `StringOpNode` (upper/lower/strip/replace/split/join/len/contains…) |
 | **Expressions** | `BinaryOp`, `UnaryOp`, f-strings, `Subscript`, `Attr`, `Call` |
 | **Other** | `Comment`, `Import`, `RawBlock`, `Exit` |
 
-## Design principles
+---
 
-- **Safe by default.** When the parser cannot prove a safe translation, it emits a comment or raises an error instead of guessing.
-- **IR-first.** Every translation goes through the IR, making it easy to add new languages without touching existing code.
-- **Idiomatic output.** Emitters produce language-native syntax (`Write-Host` for PowerShell, `puts` for Ruby, `echo` for Nim) rather than transliterating Python.
-- **Extensible.** Add a new language by creating one file (`xxx_emitter.py`) and registering it in `__init__.py`.
+## Design Principles
+
+- 🛡️ **Safe by default** — emits a comment or raises an error rather than guessing on unsafe translations
+- 🔀 **IR-first** — all translations go through the IR; adding a new language never touches existing code
+- ✨ **Idiomatic output** — `Write-Host` for PowerShell, `puts` for Ruby, `echo` for Nim
+- 🔌 **Extensible** — one file per language: create `xxx_emitter.py`, register it, done
+
+---
 
 ## Development
 
 ```bash
-# Clone and install with dev dependencies
-git clone https://github.com/v1ral-its/ITS-Convert.git
-cd ITS-Convert
+# Install with dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
@@ -249,14 +305,17 @@ pytest tests/ -v
 # 5. Add tests in tests/test_convert.py
 ```
 
-## License
-
-[MIT](LICENSE) -- use it however you want.
-
 ---
 
+## License
+
+[MIT](LICENSE) — use it however you want.
+
 <div align="center">
+<br/>
 
 *If ITS-Convert saved you time, consider giving it a star ⭐*
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:a855f7,100:6366f1&height=80&section=footer" width="100%" />
 
 </div>
