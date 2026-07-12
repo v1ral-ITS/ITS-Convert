@@ -248,7 +248,7 @@ itsconvert/
 │   ├── sh_parser.py       # Bash heuristic parser
 │   ├── ps1_parser.py      # PowerShell heuristic parser
 │   ├── cmd_parser.py      # CMD heuristic parser
-│   ├── [lang]_emitter.py  # One emitter per target language (25 total)
+│   └── [lang]_emitter.py  # One emitter per target language (25 total)
 ├── packagers/
 │   └── __init__.py        # PyInstaller, Nuitka, ps2exe, shc, wrapper
 examples/
@@ -311,7 +311,28 @@ pytest tests/ -v
 
 [MIT](LICENSE) — use it however you want.
 
+---
+
 <div align="center">
+
+<br/>
+
+<img src="https://i.ibb.co/gFJwwVL4/ITSolutions-LOGO.jpg" alt="ImPerial TeK. Solutions" width="120" />
+
+<br/>
+
+**Bear Carrington**
+
+*Founder | ImPerial TeK. Solutions (ITSolutions)*
+
+📧 [ITSolutions_MGNT@proton.me](mailto:ITSolutions_MGNT@proton.me) &nbsp;·&nbsp; 🌐 [codepolisher.app](https://codepolisher.app)
+
+<br/>
+
+*Innovating technology with precision and integrity.*
+
+© ImPerial TeK. Solutions — All Rights Reserved
+
 <br/>
 
 *If ITS-Convert saved you time, consider giving it a star ⭐*
