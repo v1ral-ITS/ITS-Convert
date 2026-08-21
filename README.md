@@ -6,7 +6,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-6366f1?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a855f7?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-56%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/tests-62%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![Languages](https://img.shields.io/badge/target%20languages-27-f59e0b?style=for-the-badge)](#supported-languages)
 [![PyPI](https://img.shields.io/badge/PyPI-itsconvert-3b82f6?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/itsconvert/)
 
