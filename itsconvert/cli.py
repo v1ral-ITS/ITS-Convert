@@ -20,6 +20,7 @@ _SUFFIX_MAP = {
     "java": ".java", "c": ".c", "cpp": ".cpp", "cs": ".cs",
     "swift": ".swift", "kt": ".kt", "dart": ".dart", "r": ".R",
     "scala": ".scala", "nim": ".nim", "zig": ".zig", "v": ".v",
+    "jl": ".jl", "ex": ".exs",
 }
 
 
@@ -59,6 +60,26 @@ def languages() -> None:
     """List available parsers and emitters."""
     print(f"[bold]Parsers[/bold] (source languages): {', '.join(available_parsers())}")
     print(f"[bold]Emitters[/bold] (target languages): {', '.join(available_emitters())}")
+
+
+@app.command()
+def batch(
+    source: Path,
+    to: list[str] = typer.Option(..., "--to", help="Repeat for each target language"),
+    output_dir: Path = typer.Option(Path("build"), "--output-dir", "-d"),
+) -> None:
+    """Translate one source file into multiple target languages."""
+    targets = list(dict.fromkeys(to))
+    unknown = sorted(set(targets) - set(available_emitters()))
+    if unknown:
+        raise typer.BadParameter(f"Unsupported target(s): {', '.join(unknown)}", param_hint="--to")
+    parser = get_parser(infer_language(source))
+    ir = parser.parse(read_text(source))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for target in targets:
+        destination = output_dir / f"{source.stem}{_SUFFIX_MAP[target]}"
+        write_text(destination, get_emitter(target).emit(ir))
+        print(f"[green]Wrote[/green] {destination}")
 
 
 @app.command()

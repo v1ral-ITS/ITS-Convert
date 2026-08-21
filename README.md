@@ -1,19 +1,19 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,100:a855f7&height=160&section=header&text=ITS-Convert&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Translate%20automation%20scripts%20across%2025%20languages&descAlignY=58&descSize=16" width="100%" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,100:a855f7&height=160&section=header&text=ITS-Convert&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Translate%20automation%20scripts%20across%2027%20languages&descAlignY=58&descSize=16" width="100%" />
 
 <br/>
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-6366f1?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a855f7?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-56%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
-[![Languages](https://img.shields.io/badge/target%20languages-25-f59e0b?style=for-the-badge)](#supported-languages)
+[![Languages](https://img.shields.io/badge/target%20languages-27-f59e0b?style=for-the-badge)](#supported-languages)
 [![PyPI](https://img.shields.io/badge/PyPI-itsconvert-3b82f6?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/itsconvert/)
 
 <br/>
 
 > **Parse once. Emit anywhere.**
-> Feed it a Python, Bash, PowerShell, or CMD script — get back idiomatic code in any of 25 languages.
+> Feed it a Python, Bash, PowerShell, or CMD script — get back idiomatic code in any of 27 languages.
 
 <br/>
 
@@ -104,7 +104,11 @@ Every source file is parsed into a **language-agnostic IR**, then an emitter wal
     <td align="center">👑<br/><b>Nim</b></td>
     <td align="center">⚡<br/><b>Zig</b></td>
     <td align="center">✅<br/><b>V</b></td>
-    <td></td>
+    <td align="center">🔬<br/><b>Julia</b></td>
+  </tr>
+  <tr>
+    <td align="center">💧<br/><b>Elixir</b></td>
+    <td></td><td></td><td></td><td></td>
   </tr>
 </table>
 
@@ -119,6 +123,14 @@ Each emitter handles: variables, print, input, if/elif/else, for/for-range/while
 ```bash
 pip install itsconvert
 ```
+
+### From npm
+
+```bash
+npm install --global itsconvert
+```
+
+The npm launcher requires Python 3.11+ and the Python runtime dependencies (`pydantic`, `rich`, and `typer`).
 
 ### From source
 
@@ -147,6 +159,9 @@ itsconvert translate examples/demo.py --to rust
 itsconvert translate examples/demo.py --to js
 itsconvert translate examples/demo.py --to ruby -o build/demo.rb
 
+# Translate once to several targets
+itsconvert batch examples/demo.py --to go --to rust --to jl --to ex -d build
+
 # Package as executable
 itsconvert build build/demo.py --builder pyinstaller
 itsconvert build build/demo.sh --builder shc
@@ -160,7 +175,7 @@ itsconvert build build/demo.ps1 --builder wrapper
 Translate into every language at once:
 
 ```bash
-for lang in py sh ps1 cmd js ts rb pl lua php go rs java c cpp cs swift kt dart r scala nim zig v; do
+for lang in py sh ps1 cmd js ts rb pl lua php go rs java c cpp cs swift kt dart r scala nim zig v jl ex; do
   itsconvert translate examples/demo.py --to "$lang"
 done
 ```
@@ -248,7 +263,7 @@ itsconvert/
 │   ├── sh_parser.py       # Bash heuristic parser
 │   ├── ps1_parser.py      # PowerShell heuristic parser
 │   ├── cmd_parser.py      # CMD heuristic parser
-│   └── [lang]_emitter.py  # One emitter per target language (25 total)
+│   └── [lang]_emitter.py  # One emitter per target language (27 total)
 ├── packagers/
 │   └── __init__.py        # PyInstaller, Nuitka, ps2exe, shc, wrapper
 examples/

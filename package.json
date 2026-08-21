@@ -1,0 +1,30 @@
+{
+  "name": "itsconvert",
+  "version": "0.1.0",
+  "description": "Translate automation scripts across 27 languages through a language-neutral IR",
+  "license": "MIT",
+  "author": "Bear Carrington <ITSolutions_MGNT@proton.me>",
+  "homepage": "https://github.com/v1ral-ITS/ITS-Convert#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/v1ral-ITS/ITS-Convert.git"
+  },
+  "bugs": "https://github.com/v1ral-ITS/ITS-Convert/issues",
+  "bin": {
+    "itsconvert": "bin/itsconvert.js"
+  },
+  "files": [
+    "bin/",
+    "itsconvert/",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepack": "node scripts/validate-npm-package.js"
+  },
+  "keywords": ["translator", "code-generator", "python", "bash", "powershell", "cross-language"]
+}

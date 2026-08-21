@@ -51,6 +51,9 @@ def infer_language(path: Path) -> Language:
         ".nim": "nim",
         ".zig": "zig",
         ".v": "v",
+        ".jl": "jl",
+        ".ex": "ex",
+        ".exs": "ex",
     }
     try:
         return mapping[ext]
