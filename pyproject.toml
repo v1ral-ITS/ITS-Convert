@@ -50,6 +50,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["itsconvert", "itsconvert.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
