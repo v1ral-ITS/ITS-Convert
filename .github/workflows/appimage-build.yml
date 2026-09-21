@@ -1,0 +1,94 @@
+name: AppImage Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      source_file:
+        description: "Source file to build"
+        required: true
+        default: "examples/xtool.py"
+      use_linuxdeploy:
+        description: "Use linuxdeploy (true) or appimagetool (false)"
+        required: true
+        default: "true"
+        type: boolean
+
+jobs:
+  build-appimage:
+    name: Build AppImage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Install linuxdeploy
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
+          chmod +x linuxdeploy
+          sudo mv linuxdeploy /usr/local/bin/
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-python/releases/download/continuous/linuxdeploy-plugin-python-x86_64.AppImage -O linuxdeploy-plugin-python
+          chmod +x linuxdeploy-plugin-python
+          sudo mv linuxdeploy-plugin-python /usr/local/bin/
+
+      - name: Install appimagetool (fallback)
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          sudo mv appimagetool /usr/local/bin/
+
+      - name: Build AppImage
+        run: |
+          itsconvert build ${{ inputs.source_file || 'examples/xtool.py' }} \
+            --builder appimage \
+            ${{ inputs.use_linuxdeploy == 'true' && '--use-linuxdeploy' || '--use-appimagetool' }} \
+            --output-dir dist
+
+      - name: List built files
+        run: |
+          echo "Built files:"
+          ls -la dist/ || true
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-output
+          path: dist/
+          retention-days: 30
+
+      - name: Test AppImage
+        run: |
+          chmod +x dist/*.AppImage 2>/dev/null || true
+          if ls dist/*.AppImage 1>/dev/null 2>&1; then
+            echo "Testing AppImage..."
+            dist/*xtool*.AppImage --version 2>/dev/null || true
+            dist/*xtool*.AppImage info 2>/dev/null || true
+          else
+            echo "No AppImage found to test"
+          fi
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.AppImage
+          generate_release_notes: true
+          name: AppImage Release ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

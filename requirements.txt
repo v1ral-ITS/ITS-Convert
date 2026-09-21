@@ -1,3 +1,43 @@
+# ITS-Convert Requirements
+# Core dependencies for translation and packaging
+
+# Core translation dependencies
 pydantic>=2.7
 rich>=13.7
 typer>=0.12
+
+# Build/packaging dependencies (optional, for build command)
+pyinstaller>=6.0
+nuitka>=2.0
+
+# Development dependencies
+pytest>=8.0
+pytest-cov>=5.0
+
+# Optional: For AppImage creation
+# linuxdeploy-x86_64.AppImage (download from GitHub releases)
+# appimagetool (download from GitHub releases)
+
+# Optional: For shell script compilation
+# shc (install via package manager)# ITS-Convert Requirements
+# Core dependencies for translation and packaging
+
+# Core translation dependencies
+pydantic>=2.7
+rich>=13.7
+typer>=0.12
+
+# Build/packaging dependencies (optional, for build command)
+pyinstaller>=6.0
+nuitka>=2.0
+
+# Development dependencies
+pytest>=8.0
+pytest-cov>=5.0
+
+# Optional: For AppImage creation
+# linuxdeploy-x86_64.AppImage (download from GitHub releases)
+# appimagetool (download from GitHub releases)
+
+# Optional: For shell script compilation
+# shc (install via package manager)

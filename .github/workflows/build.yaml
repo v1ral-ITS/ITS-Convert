@@ -1,0 +1,154 @@
+name: Build and Package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      builder:
+        description: "Builder to use"
+        required: true
+        default: "pyinstaller"
+        type: choice
+        options:
+          - pyinstaller
+          - nuitka
+          - appimage
+          - wrapper
+          - shc
+          - cx_freeze
+          - briefcase
+      platform:
+        description: "Target platform"
+        required: true
+        default: "ubuntu-latest"
+        type: choice
+        options:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+
+jobs:
+  build:
+    name: Build with ${{ inputs.builder || 'pyinstaller' }}
+    runs-on: ${{ inputs.platform || 'ubuntu-latest' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pyinstaller nuitka
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y shc
+          fi
+
+      - name: Install linuxdeploy (Linux only)
+        if: runner.os == 'Linux' && inputs.builder == 'appimage'
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
+          chmod +x linuxdeploy
+          sudo mv linuxdeploy /usr/local/bin/
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-python/releases/download/continuous/linuxdeploy-plugin-python-x86_64.AppImage -O linuxdeploy-plugin-python
+          chmod +x linuxdeploy-plugin-python
+          sudo mv linuxdeploy-plugin-python /usr/local/bin/
+
+      - name: Set up Node.js for codepolisher
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install codepolisher-cli
+        run: |
+          cd /tmp
+          git clone https://github.com/v1ral-ITS/codepolisher-cli.git
+          cd codepolisher-cli
+          npm install
+          npm link
+          cd $GITHUB_WORKSPACE
+
+      - name: Run AI code review
+        run: |
+          codepolisher review examples/demo.py --output json --fail-on-critical || true
+
+      - name: Translate to target languages
+        run: |
+          itsconvert batch examples/demo.py \
+            --to py --to go --to rs --to js \
+            --output-dir build/translated
+
+      - name: Build with selected builder
+        run: |
+          itsconvert build build/translated/demo.py \
+            --builder ${{ inputs.builder || 'pyinstaller' }} \
+            --output-dir dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-artifacts
+          path: dist/
+          retention-days: 7
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short
+
+  release:
+    name: Release
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-artifacts
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

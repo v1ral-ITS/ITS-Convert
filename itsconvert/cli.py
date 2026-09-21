@@ -19,6 +19,27 @@ _SUFFIX_MAP = {
     "lua": ".lua", "php": ".php", "go": ".go", "rs": ".rs",
     "java": ".java", "c": ".c", "cpp": ".cpp", "cs": ".cs",
     "swift": ".swift", "kt": ".kt", "dart": ".dart", "r": ".R",
+    "scala": ".scala", "nim": ".nim", "zig": ".zig", "v": ".vfrom __future__ import annotations
+
+from pathlib import Path
+import json
+
+import typer
+from rich import print
+
+from itsconvert.analyzer import summarize_ir
+from itsconvert.packagers import get_packager
+from itsconvert.translators import get_emitter, get_parser, available_emitters, available_parsers
+from itsconvert.utils import infer_language, read_text, write_text
+
+app = typer.Typer(add_completion=False, help="Translate simple automation scripts between 25+ languages.")
+
+_SUFFIX_MAP = {
+    "py": ".py", "sh": ".sh", "ps1": ".ps1", "cmd": ".cmd",
+    "js": ".js", "ts": ".ts", "rb": ".rb", "pl": ".pl",
+    "lua": ".lua", "php": ".php", "go": ".go", "rs": ".rs",
+    "java": ".java", "c": ".c", "cpp": ".cpp", "cs": ".cs",
+    "swift": ".swift", "kt": ".kt", "dart": ".dart", "r": ".R",
     "scala": ".scala", "nim": ".nim", "zig": ".zig", "v": ".v",
     "jl": ".jl", "ex": ".exs",
 }
