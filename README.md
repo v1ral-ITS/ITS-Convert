@@ -47,15 +47,38 @@
 
 ITS-Convert is a **complete toolchain** with three superpowers:
 
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  TRANSLATE      │    │      BUILD       │    │    PACKAGE      │
-│                 │    │                  │    │                 │
-│ Python → Go     │───▶│ PyInstaller      │───▶│ Windows .exe   │
-│ Python → Rust   │    │ Nuitka           │    │ Linux AppImage  │
-│ Bash → Python   │    │ cx_Freeze        │    │ macOS .app      │
-│ ...30+ combos   │    │ Briefcase        │    │ Standalone bin  │
-└─────────────────┘    │ py2exe           │    │ Docker image    │
-│ py2app          │    │                  │    |                 |
-│ shc             │    └─────────────_────┘    └─────────────────┘
-│ wrapper         │
-└─────────────────┘
+```text
+┌─────────────────────┐
+│      TRANSLATE      │
+├─────────────────────┤
+│ Python → Go         │
+│ Python → Rust       │
+│ Bash   → Python     │
+│ ...30+ combinations │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│       BUILD         │
+├─────────────────────┤
+│ PyInstaller         │
+│ Nuitka              │
+│ cx_Freeze           │
+│ Briefcase           │
+│ py2exe              │
+│ py2app              │
+│ shc                 │
+│ wrapper             │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│      PACKAGE        │
+├─────────────────────┤
+│ Windows .exe        │
+│ Linux AppImage      │
+│ macOS .app          │
+│ Standalone Binary   │
+│ Docker Image        │
+└─────────────────────┘
+```
