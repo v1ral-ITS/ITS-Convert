@@ -19,7 +19,7 @@
 <br/>
 
 </div>
- <img src="https://i.ibb.co/TqtRRLxW/ITSolutions-LOGO.jpg" alt="ITSolutions-LOGO" border="0"> 
+ 
 ---
 
 ## Table of Contents
@@ -57,7 +57,7 @@ ITS-Convert is a **complete toolchain** with three superpowers:
 │ ...30+ combinations │
 └──────────┬──────────┘
            │
-           ▼
+           ▼                             <img src="https://i.ibb.co/TqtRRLxW/ITSolutions-LOGO.jpg" alt="ITSolutions-LOGO" border="0"> 
 ┌─────────────────────┐
 │       BUILD         │
 ├─────────────────────┤
