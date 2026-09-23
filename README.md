@@ -44,8 +44,8 @@
 ---
 
 ## How it works
-
-ITS-Convert is a **complete toolchain** with three superpowers:
+                                                               
+ITS-Convert is a **complete toolchain** with three superpowers:  ![ITSolutions Logo](https://i.ibb.co/TqtRRLxW/ITSolutions-LOGO.jpg)
 
 ```text
 ┌─────────────────────┐
@@ -57,9 +57,7 @@ ITS-Convert is a **complete toolchain** with three superpowers:
 │ ...30+ combinations │
 └──────────┬──────────┘
            │
-           ▼                            <p align="center">
-  <img src="https://i.ibb.co/TqtRRLxW/ITSolutions-LOGO.jpg" alt="ITSolutions Logo" width="300">
- </p>      |
+           ▼                            
 ┌─────────────────────┐
 │       BUILD         │
 ├─────────────────────┤
