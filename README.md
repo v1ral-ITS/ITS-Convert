@@ -56,8 +56,10 @@ ITS-Convert is a **complete toolchain** with three superpowers:
 │ Bash   → Python     │
 │ ...30+ combinations │
 └──────────┬──────────┘
-           │
-           ▼                             <img src="https://i.ibb.co/TqtRRLxW/ITSolutions-LOGO.jpg" alt="ITSolutions-LOGO" border="0"> 
+           │                                     <p align="center">
+                                                 <img src="https://i.ibb.co/TqtRRLxW/ITSolutions-LOGO.jpg" alt="ITSolutions Logo" width="300"
+                                                 </p>
+           ▼                              
 ┌─────────────────────┐
 │       BUILD         │
 ├─────────────────────┤
