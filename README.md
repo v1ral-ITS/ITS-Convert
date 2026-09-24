@@ -1,9 +1,3 @@
-<div align="center">
-
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:6366f1,100:a855f7&height=160&section=header&text=ITS-Convert&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Translate%2C%20Build%2C%20%26%20Package%20Scripts%20Across%2027%2B%20Languages&descAlignY=58&descSize=16" width="100%" />
-
-<br/>
-
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-6366f1?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-a855f7?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-62%20passing-22c55e?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
