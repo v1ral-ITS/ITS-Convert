@@ -10,6 +10,10 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class CEmitter:
     def emit(self, ir: ScriptIR) -> str:
         fns = [n for n in ir.nodes if isinstance(n, FunctionDef)]
@@ -68,7 +72,7 @@ class CEmitter:
             if node.action == "nth" and node.index is not None and node.name: return [f"{p}const char* {node.name} = argv[{node.index + 1}];"]
             if node.action == "count" and node.name: return [f"{p}int {node.name} = argc;"]
             return [f"{p}/* argv: {node.action} */"]
-        if isinstance(node, Raise): return [f"{p}fprintf(stderr, {self._v(node.message) if node.message else '\"Error\"'}); exit(1);"]
+        if isinstance(node, Raise): return [f"{p}fprintf(stderr, {self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL}); exit(1);"]
         if isinstance(node, Assert): return [f"{p}assert({self._cond(node.condition)});"]
         if isinstance(node, RawBlock): return [f"{p}/* raw ({node.language}) */"] + [f"{p}/* {l} */" for l in node.code.split("\n")]
         return [f"{p}/* FIXME: {node.type} */"]

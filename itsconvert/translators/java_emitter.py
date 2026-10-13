@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class JavaEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ["import java.util.*;", "import java.io.*;", "", "public class Main {", ""]
@@ -35,7 +40,7 @@ class JavaEmitter:
         if isinstance(node, AugAssign): return [f"{p}{node.name} {node.op}= {self._v(node.value)};"]
         if isinstance(node, Print):
             vals = " + " + " + ".join(self._v(v) for v in node.values) if node.values else ""
-            return [f"{p}System.out.println({', '.join(self._v(v) for v in node.values) if node.values else '\"\"'});"]
+            return [f"{p}System.out.println({', '.join(self._v(v) for v in node.values) if node.values else _EMPTY_STRING_LITERAL});"]
         if isinstance(node, Input):
             return [f"{p}java.util.Scanner scanner = new java.util.Scanner(System.in);",
                     f'{p}System.out.print("{node.prompt}");',
@@ -71,7 +76,7 @@ class JavaEmitter:
                 lines.extend(self._body(node.finally_body, i+1))
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}throw new RuntimeException({self._v(node.message) if node.message else '\"Error\"'});"]
+        if isinstance(node, Raise): return [f"{p}throw new RuntimeException({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert): return [f"{p}assert {self._cond(node.condition)} : \"Assertion failed\";"]

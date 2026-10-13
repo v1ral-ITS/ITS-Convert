@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_DEFAULT_ERROR_LITERAL = '"Error"'
+_ASSERTION_ERROR_LITERAL = '"Assertion failed"'
+
+
 class LuaEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = []
@@ -66,10 +71,10 @@ class LuaEmitter:
             lines.extend(self._body(node.catch_body, i+1))
             lines.append(f"{p}end")
             return lines
-        if isinstance(node, Raise): return [f"{p}error({self._v(node.message) if node.message else '\"Error\"'})"]
+        if isinstance(node, Raise): return [f"{p}error({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL})"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
-        if isinstance(node, Assert): return [f"{p}assert({self._cond(node.condition)}, {self._v(node.message) if node.message else '\"Assertion failed\"'})"]
+        if isinstance(node, Assert): return [f"{p}assert({self._cond(node.condition)}, {self._v(node.message) if node.message else _ASSERTION_ERROR_LITERAL})"]
         if isinstance(node, RawBlock): return [f"{p}-- raw ({node.language})"] + [f"{p}-- {l}" for l in node.code.split("\n")]
         return [f"{p}-- FIXME: {node.type}"]
 

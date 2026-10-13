@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class VLangEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ["module main", ""]
@@ -29,7 +34,7 @@ class VLangEmitter:
         if isinstance(node, Comment): return [f"{p}// {node.text}"]
         if isinstance(node, Assign): return [f"{p}mut {node.name} := {self._v(node.value)}"]
         if isinstance(node, AugAssign): return [f"{p}{node.name} {node.op}= {self._v(node.value)}"]
-        if isinstance(node, Print): return [f"{p}println({', '.join(self._v(v) for v in node.values) if node.values else '\"\"'})"]
+        if isinstance(node, Print): return [f"{p}println({', '.join(self._v(v) for v in node.values) if node.values else _EMPTY_STRING_LITERAL})"]
         if isinstance(node, Input):
             if node.prompt: return [f'{p}print("{node.prompt}")']
             return [f"{p}{node.name} := input()"]
@@ -63,7 +68,7 @@ class VLangEmitter:
             lines = [f"{p}/* V: no try-catch */"]
             lines.extend(self._body(node.try_body, i))
             return lines
-        if isinstance(node, Raise): return [f"{p}panic({self._v(node.message) if node.message else '\"Error\"'})"]
+        if isinstance(node, Raise): return [f"{p}panic({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL})"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert): return [f"{p}assert {self._cond(node.condition)}"]

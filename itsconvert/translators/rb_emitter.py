@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_RUBY_ERROR_LITERAL = 'RuntimeError, "Error"'
+
+
 class RubyEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = []
@@ -79,7 +84,7 @@ class RubyEmitter:
                 lines.extend(self._body(node.finally_body, i+1))
             lines.append(f"{p}end")
             return lines
-        if isinstance(node, Raise): return [f"{p}raise {self._v(node.message) if node.message else 'RuntimeError, \"Error\"'}"]
+        if isinstance(node, Raise): return [f"{p}raise {self._v(node.message) if node.message else _RUBY_ERROR_LITERAL}"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert): return [f"{p}raise 'Assertion failed' unless {self._cond(node.condition)}"]
@@ -111,12 +116,12 @@ class RubyEmitter:
         base = self._v(n.operands[0]) if n.operands else "s"
         ops = {"upper": f"{base}.upcase", "lower": f"{base}.downcase", "strip": f"{base}.strip",
                "len": f"{base}.length",
-               "replace": f"{base}.gsub({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}, {self._v(n.operands[2]) if len(n.operands)>2 else '\"\"'})",
-               "split": f"{base}.split({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "join": f"{self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}.join({base})" if len(n.operands)>1 else f"{base}.join",
-               "startswith": f"{base}.start_with?({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "endswith": f"{base}.end_with?({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "contains": f"{base}.include?({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})"}
+               "replace": f"{base}.gsub({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}, {self._v(n.operands[2]) if len(n.operands)>2 else _EMPTY_STRING_LITERAL})",
+               "split": f"{base}.split({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "join": f"{self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}.join({base})" if len(n.operands)>1 else f"{base}.join",
+               "startswith": f"{base}.start_with?({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "endswith": f"{base}.end_with?({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "contains": f"{base}.include?({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})"}
         expr = ops.get(n.op, f"# {n.op}")
         if n.name: return [f"{p}{n.name} = {expr}"]
         return [f"{p}{expr}"]

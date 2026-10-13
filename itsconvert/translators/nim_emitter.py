@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class NimEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = []
@@ -23,7 +28,7 @@ class NimEmitter:
         if isinstance(node, Assign): return [f"{p}let {node.name} = {self._v(node.value)}"]
         if isinstance(node, AugAssign): return [f"{p}{node.name}.{self._augop(node.op)}({self._v(node.value)})"]
         if isinstance(node, Print):
-            return [f"{p}echo {', '.join(self._v(v) for v in node.values) if node.values else '\"\"'}"]
+            return [f"{p}echo {', '.join(self._v(v) for v in node.values) if node.values else _EMPTY_STRING_LITERAL}"]
         if isinstance(node, Input):
             if node.prompt: return [f'{p}stdout.write("{node.prompt}")']
             return [f"{p}let {node.name} = readLine(stdin)"]
@@ -60,7 +65,7 @@ class NimEmitter:
             lines.append(f"{p}except {cv}:")
             lines.extend(self._body(node.catch_body, i+1))
             return lines
-        if isinstance(node, Raise): return [f"{p}raise newException(ValueError, {self._v(node.message) if node.message else '\"Error\"'})"]
+        if isinstance(node, Raise): return [f"{p}raise newException(ValueError, {self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL})"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert): return [f"{p}assert {self._cond(node.condition)}"]

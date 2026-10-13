@@ -10,6 +10,10 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class GoEmitter:
     def emit(self, ir: ScriptIR) -> str:
         imports = set()
@@ -106,7 +110,7 @@ class GoEmitter:
             lines = [f"{p}// Go: no try-catch; using defer/recover"]
             lines.extend(self._body(node.try_body, i))
             return lines
-        if isinstance(node, Raise): return [f"{p}panic({self._v(node.message) if node.message else '\"Error\"'})"]
+        if isinstance(node, Raise): return [f"{p}panic({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL})"]
         if isinstance(node, Assert): return [f"{p}if !({self._cond(node.condition)}) {{ fmt.Println(\"assertion failed\"); os.Exit(1) }}"]
         if isinstance(node, RawBlock): return [f"{p}// raw ({node.language})"] + [f"{p}// {l}" for l in node.code.split("\n")]
         return [f"{p}// FIXME: {node.type}"]

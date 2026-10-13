@@ -10,6 +10,10 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class RustEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ["fn main() {"]
@@ -74,7 +78,7 @@ class RustEmitter:
             lines.append(f"{p}    }}")
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}panic!({self._v(node.message) if node.message else '\"Error\"'});"]
+        if isinstance(node, Raise): return [f"{p}panic!({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert): return [f"{p}assert!({self._cond(node.condition)});"]

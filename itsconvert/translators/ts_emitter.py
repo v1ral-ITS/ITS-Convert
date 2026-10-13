@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class TSEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ['"use strict";', ""]
@@ -82,7 +87,7 @@ class TSEmitter:
                 lines.extend(self._body(node.finally_body, i+1))
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}throw new Error({self._v(node.message) if node.message else '\"Error\"'});"]
+        if isinstance(node, Raise): return [f"{p}throw new Error({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert):
@@ -127,12 +132,12 @@ class TSEmitter:
         base = self._v(n.operands[0]) if n.operands else "s"
         ops = {"upper": f"{base}.toUpperCase()", "lower": f"{base}.toLowerCase()", "strip": f"{base}.trim()",
                "len": f"{base}.length",
-               "replace": f"{base}.replace({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}, {self._v(n.operands[2]) if len(n.operands)>2 else '\"\"'})",
-               "split": f"{base}.split({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "join": f"({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}).join({base})",
-               "startswith": f"{base}.startsWith({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "endswith": f"{base}.endsWith({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "contains": f"{base}.includes({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})"}
+               "replace": f"{base}.replace({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}, {self._v(n.operands[2]) if len(n.operands)>2 else _EMPTY_STRING_LITERAL})",
+               "split": f"{base}.split({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "join": f"({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}).join({base})",
+               "startswith": f"{base}.startsWith({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "endswith": f"{base}.endsWith({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "contains": f"{base}.includes({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})"}
         expr = ops.get(n.op, f"/* {n.op} */")
         if n.name: return [f"{p}let {n.name} = {expr};"]
         return [f"{p}{expr};"]

@@ -10,6 +10,12 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+_ASSERTION_ERROR_LITERAL = '"Assertion failed"'
+
+
 class JSEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ['"use strict";', ""]
@@ -79,10 +85,10 @@ class JSEmitter:
                 lines.extend(self._body(node.finally_body, indent+1))
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}throw new Error({self._v(node.message) if node.message else '\"Error\"'});"]
+        if isinstance(node, Raise): return [f"{p}throw new Error({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
-        if isinstance(node, Assert): return [f"{p}if (!({self._cond(node.condition)})) {{ throw new Error({self._v(node.message) if node.message else '\"Assertion failed\"'}); }}"]
+        if isinstance(node, Assert): return [f"{p}if (!({self._cond(node.condition)})) {{ throw new Error({self._v(node.message) if node.message else _ASSERTION_ERROR_LITERAL}); }}"]
         if isinstance(node, RawBlock): return [f"{p}// raw ({node.language})"] + [f"{p}// {l}" for l in node.code.split("\n")]
         return [f"{p}// FIXME: {node.type}"]
 
@@ -109,12 +115,12 @@ class JSEmitter:
 
     def _strop(self, n: StringOpNode, p: str) -> list[str]:
         op_map = {"upper": "toUpperCase()", "lower": "toLowerCase()", "strip": "trim()", "len": ".length",
-                   "replace": f".replace({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}, {self._v(n.operands[2]) if len(n.operands)>2 else '\"\"'})",
-                   "split": f".split({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-                   "join": f".join({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-                   "startswith": f".startsWith({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-                   "endswith": f".endsWith({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-                   "contains": f".includes({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})"}
+                   "replace": f".replace({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}, {self._v(n.operands[2]) if len(n.operands)>2 else _EMPTY_STRING_LITERAL})",
+                   "split": f".split({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+                   "join": f".join({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+                   "startswith": f".startsWith({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+                   "endswith": f".endsWith({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+                   "contains": f".includes({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})"}
         expr = f"{self._v(n.operands[0])}{op_map.get(n.op, '')}" if n.operands else f"/* {n.op} */"
         if n.name: return [f"{p}let {n.name} = {expr};"]
         return [f"{p}{expr};"]

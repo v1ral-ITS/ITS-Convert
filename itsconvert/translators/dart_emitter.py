@@ -10,6 +10,10 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class DartEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ["import 'dart:io';", ""]
@@ -63,7 +67,7 @@ class DartEmitter:
             lines.extend(self._body(node.catch_body, i+1))
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}throw Exception({self._v(node.message) if node.message else '\"Error\"'});"]
+        if isinstance(node, Raise): return [f"{p}throw Exception({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, FileIONode): return self._file(node, p)

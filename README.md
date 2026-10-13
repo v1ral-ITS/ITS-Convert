@@ -342,7 +342,7 @@ The October 2026 audit found a malformed CLI file, disconnected packager registr
 
 The pre-repair full suite failed during collection; 56 tests passed only when the CLI-dependent module was excluded. After repair, the full suite is run with the added regressions. CI badges above report live workflow status rather than a hardcoded passing-test claim.
 
-Local validation: **86 tests passed on Windows (Python 3.13)**; **86 tests passed in WSL (Python 3.14, Node 24)**. The Windows PyInstaller executable and Linux appimagetool AppImage both ran and printed the expected message. macOS packaging, linuxdeploy/plugin bundling, Nuitka compilation, and all 26 target compilers are **not** certified by this audit. The adapter table deliberately distinguishes implementation from end-to-end validation.
+Local validation: **86 tests passed on Windows (Python 3.11 and 3.13)**; **86 tests passed in WSL (Python 3.14, Node 24)**. The Windows PyInstaller executable and Linux appimagetool AppImage both ran and printed the expected message. macOS packaging, linuxdeploy/plugin bundling, Nuitka compilation, and all 26 target compilers are **not** certified by this audit. The adapter table deliberately distinguishes implementation from end-to-end validation.
 
 ## License
 

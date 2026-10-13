@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class KotlinEmitter:
     def emit(self, ir: ScriptIR) -> str:
         fns = [n for n in ir.nodes if isinstance(n, FunctionDef)]
@@ -28,7 +33,7 @@ class KotlinEmitter:
         if isinstance(node, Comment): return [f"{p}// {node.text}"]
         if isinstance(node, Assign): return [f"{p}var {node.name} = {self._v(node.value)}"]
         if isinstance(node, AugAssign): return [f"{p}{node.name} {node.op}= {self._v(node.value)}"]
-        if isinstance(node, Print): return [f"{p}println({', '.join(self._v(v) for v in node.values) if node.values else '\"\"'})"]
+        if isinstance(node, Print): return [f"{p}println({', '.join(self._v(v) for v in node.values) if node.values else _EMPTY_STRING_LITERAL})"]
         if isinstance(node, Input):
             return [f'{p}print("{node.prompt}")',
                     f"{p}var {node.name} = readlnOrNull() ?: \"\""]
@@ -63,7 +68,7 @@ class KotlinEmitter:
                 lines.extend(self._body(node.finally_body, i+1))
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}throw Exception({self._v(node.message) if node.message else '\"Error\"'})"]
+        if isinstance(node, Raise): return [f"{p}throw Exception({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL})"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, FileIONode): return self._file(node, p)

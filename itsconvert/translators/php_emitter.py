@@ -10,6 +10,11 @@ from itsconvert.ir import (
 )
 
 
+# Keep escaped literals outside f-string expressions for Python 3.11.
+_EMPTY_STRING_LITERAL = '""'
+_DEFAULT_ERROR_LITERAL = '"Error"'
+
+
 class PHPEmitter:
     def emit(self, ir: ScriptIR) -> str:
         lines: list[str] = ["<?php", ""]
@@ -72,7 +77,7 @@ class PHPEmitter:
                 lines.extend(self._body(node.finally_body, i+1))
             lines.append(f"{p}}}")
             return lines
-        if isinstance(node, Raise): return [f"{p}throw new Exception({self._v(node.message) if node.message else '\"Error\"'});"]
+        if isinstance(node, Raise): return [f"{p}throw new Exception({self._v(node.message) if node.message else _DEFAULT_ERROR_LITERAL});"]
         if isinstance(node, ListOp): return self._list(node, p)
         if isinstance(node, DictOp): return self._dict(node, p)
         if isinstance(node, Assert): return [f"{p}assert({self._cond(node.condition)});"]
@@ -104,12 +109,12 @@ class PHPEmitter:
         base = self._v(n.operands[0]) if n.operands else "$s"
         ops = {"upper": f"strtoupper({base})", "lower": f"strtolower({base})", "strip": f"trim({base})",
                "len": f"strlen({base})",
-               "replace": f"str_replace({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}, {self._v(n.operands[2]) if len(n.operands)>2 else '\"\"'}, {base})",
-               "split": f"explode({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}, {base})",
-               "join": f"implode({self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'}, {base})",
-               "startswith": f"str_starts_with({base}, {self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "endswith": f"str_ends_with({base}, {self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})",
-               "contains": f"str_contains({base}, {self._v(n.operands[1]) if len(n.operands)>1 else '\"\"'})"}
+               "replace": f"str_replace({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}, {self._v(n.operands[2]) if len(n.operands)>2 else _EMPTY_STRING_LITERAL}, {base})",
+               "split": f"explode({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}, {base})",
+               "join": f"implode({self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL}, {base})",
+               "startswith": f"str_starts_with({base}, {self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "endswith": f"str_ends_with({base}, {self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})",
+               "contains": f"str_contains({base}, {self._v(n.operands[1]) if len(n.operands)>1 else _EMPTY_STRING_LITERAL})"}
         expr = ops.get(n.op, f"/* {n.op} */")
         if n.name: return [f"{p}${n.name} = {expr};"]
         return [f"{p}{expr};"]
