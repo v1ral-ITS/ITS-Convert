@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import shutil
+import os
+import shlex
+import tempfile
 import subprocess
 from pathlib import Path
 
@@ -40,6 +43,8 @@ class AppImagePackager:
         Returns:
             Path to the created AppImage file
         """
+        source_file = source_file.resolve(strict=True)
+        output_dir = output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         if self.use_linuxdeploy:
@@ -58,10 +63,7 @@ class AppImagePackager:
                 "from https://github.com/linuxdeploy/linuxdeploy/releases"
             )
 
-        appdir = output_dir / "AppDir"
-        if appdir.exists():
-            shutil.rmtree(appdir)
-        appdir.mkdir(parents=True)
+        appdir = Path(tempfile.mkdtemp(prefix="AppDir-", dir=output_dir))
 
         usr_dir = appdir / "usr"
         usr_dir.mkdir(exist_ok=True)
@@ -73,11 +75,7 @@ class AppImagePackager:
             shutil.copy2(source_file, target_bin)
 
             aprun = appdir / "AppRun"
-            aprun_script = r"""#!/bin/bash
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-exec python3 "$HERE/usr/bin/$(basename "$SELF")" "$@"
-"""
+            aprun_script = '#!/bin/bash\nHERE=$(dirname "$(readlink -f "$0")")\nexec python3 "$HERE/usr/bin/"' + shlex.quote(source_file.name) + ' "$@"\n'
             aprun.write_text(aprun_script)
             aprun.chmod(0o755)
 
@@ -90,7 +88,8 @@ Icon={source_file.stem}
 Terminal=true
 Categories=Utility;
 """
-            desktop_file.write_text(desktop_content)
+            desktop_file.write_text(desktop_content, encoding="utf-8")
+            (appdir / f"{source_file.stem}.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#6366f1"/><text x="64" y="78" text-anchor="middle" font-size="44" fill="white">ITS</text></svg>', encoding="utf-8")
         else:
             target_bin = bin_dir / source_file.name
             shutil.copy2(source_file, target_bin)
@@ -113,15 +112,16 @@ Icon={source_file.stem}
 Terminal=false
 Categories=Utility;
 """
-            desktop_file.write_text(desktop_content)
+            desktop_file.write_text(desktop_content, encoding="utf-8")
+            (appdir / f"{source_file.stem}.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#6366f1"/><text x="64" y="78" text-anchor="middle" font-size="44" fill="white">ITS</text></svg>', encoding="utf-8")
 
         output_appimage = output_dir / f"{source_file.stem}-x86_64.AppImage"
 
         cmd = [
             str(linuxdeploy_path),
             "--appdir", str(appdir),
-            "--executable", str(aprun),
             "--desktop-file", str(desktop_file),
+            "--icon-file", str(appdir / f"{source_file.stem}.svg"),
             "--output", "appimage",
         ]
 
@@ -133,6 +133,8 @@ Categories=Utility;
             capture_output=True,
             text=True,
             check=False,
+            cwd=output_dir,
+            env={**os.environ, "OUTPUT": str(output_appimage)},
         )
 
         if result.returncode != 0:
@@ -143,10 +145,6 @@ Categories=Utility;
         expected_output = output_dir / f"{source_file.stem}-x86_64.AppImage"
         if expected_output.exists():
             return expected_output
-
-        appimages = list(output_dir.glob("*.AppImage"))
-        if appimages:
-            return appimages[0]
 
         raise PackagingError(
             f"AppImage not found in {output_dir}. linuxdeploy output: {result.stdout}"
@@ -163,10 +161,7 @@ Categories=Utility;
                 "https://github.com/AppImage/AppImageKit/releases"
             )
 
-        appdir = output_dir / "AppDir"
-        if appdir.exists():
-            shutil.rmtree(appdir)
-        appdir.mkdir(parents=True)
+        appdir = Path(tempfile.mkdtemp(prefix="AppDir-", dir=output_dir))
 
         if source_file.suffix == ".py":
             usr_bin = appdir / "usr" / "bin"
@@ -174,11 +169,7 @@ Categories=Utility;
             shutil.copy2(source_file, usr_bin / source_file.name)
 
             aprun = appdir / "AppRun"
-            aprun_script = r"""#!/bin/bash
-SELF=$(readlink -f "$0")
-HERE=${SELF%/*}
-exec python3 "$HERE/usr/bin/$(basename "$SELF")" "$@"
-"""
+            aprun_script = '#!/bin/bash\nHERE=$(dirname "$(readlink -f "$0")")\nexec python3 "$HERE/usr/bin/"' + shlex.quote(source_file.name) + ' "$@"\n'
             aprun.write_text(aprun_script)
             aprun.chmod(0o755)
         else:
@@ -204,7 +195,8 @@ Icon={source_file.stem}
 Terminal=false
 Categories=Utility;
 """
-        desktop_file.write_text(desktop_content)
+        desktop_file.write_text(desktop_content, encoding="utf-8")
+        (appdir / f"{source_file.stem}.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#6366f1"/></svg>', encoding="utf-8")
 
         output_appimage = output_dir / f"{source_file.stem}-x86_64.AppImage"
 
@@ -219,6 +211,8 @@ Categories=Utility;
             capture_output=True,
             text=True,
             check=False,
+            cwd=output_dir,
+            env={**os.environ, "OUTPUT": str(output_appimage)},
         )
 
         if result.returncode != 0:

@@ -60,12 +60,17 @@ def _val(node: ast.expr | None) -> Value:
         return Value(kind="unaryop", parts=[Value(kind="string", value=op), _val(node.operand)])
     if isinstance(node, ast.BoolOp):
         op = "and" if isinstance(node.op, ast.And) else "or"
-        return Value(kind="binop", parts=[_val(node.values[0]), Value(kind="string", value=op), _val(node.values[1])])
+        result = _val(node.values[0])
+        for operand in node.values[1:]:
+            result = Value(kind="binop", parts=[result, Value(kind="string", value=op), _val(operand)])
+        return result
     if isinstance(node, ast.Compare):
         if len(node.ops) == 1:
             op_map = {ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
                        ast.Gt: ">", ast.GtE: ">=", ast.Is: "==", ast.IsNot: "!="}
-            op = op_map.get(type(node.ops[0]), "==")
+            op = op_map.get(type(node.ops[0]))
+            if op is None:
+                raise UnsupportedConstructError("Membership comparisons are not supported by the shared IR")
             return Value(kind="binop", parts=[_val(node.left), Value(kind="string", value=op), _val(node.comparators[0])])
         # chain: a < b < c  → flatten to (a < b) and (b < c)
         parts = []
@@ -73,7 +78,9 @@ def _val(node: ast.expr | None) -> Value:
         for op_node, right in zip(node.ops, node.comparators):
             op_map = {ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
                        ast.Gt: ">", ast.GtE: ">=", ast.Is: "==", ast.IsNot: "!="}
-            op = op_map.get(type(op_node), "==")
+            op = op_map.get(type(op_node))
+            if op is None:
+                raise UnsupportedConstructError("Membership comparisons are not supported by the shared IR")
             parts.append(Value(kind="binop", parts=[_val(left), Value(kind="string", value=op), _val(right)]))
             left = right
         result = parts[0]
@@ -137,7 +144,9 @@ def _condition(test: ast.expr) -> Condition:
     if isinstance(test, ast.Compare) and len(test.ops) == 1:
         op_map = {ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
                    ast.Gt: ">", ast.GtE: ">=", ast.Is: "==", ast.IsNot: "!="}
-        op = op_map.get(type(test.ops[0]), "==")
+        op = op_map.get(type(test.ops[0]))
+        if op is None:
+            raise UnsupportedConstructError("Membership comparisons are not supported by the shared IR")
         return Condition(left=_val(test.left), op=op, right=_val(test.comparators[0]))
     # fallback: treat as bool comparison
     return Condition(left=_val(test), op="!=", right=Value(kind="bool", value=False))
@@ -255,7 +264,7 @@ class PythonParser:
             if name == "open":
                 return self._translate_file_open(val, warnings)
             # general function call as command passthrough
-            return Command(command=name, args=[_val(a) for a in val.args], capture=False, name=None)
+            return Assign(name="_", value=_val(val))
         return None
 
     def _translate_print(self, call: ast.Call) -> Print:
@@ -264,7 +273,7 @@ class PythonParser:
         file = None
         for kw in call.keywords:
             if kw.arg == "end":
-                end = str(_val(kw.value).value or "\n")
+                end = str(_val(kw.value).value)
             elif kw.arg == "file":
                 file = _val(kw.value)
         return Print(values=values, end=end, file=file)
@@ -428,7 +437,7 @@ class PythonParser:
         # defaults (match from the end)
         defaults = node.args.defaults
         if defaults:
-            offset = len(params) - len(defaults)
+            offset = len(node.args.args) - len(defaults)
             for i, d in enumerate(defaults):
                 params[offset + i].default = _val(d)
 
@@ -437,6 +446,8 @@ class PythonParser:
         return FunctionDef(name=node.name, params=params, body=body, return_type=return_type)
 
     def _translate_try(self, node: ast.Try, warnings: list[str]) -> TryCatch:
+        if len(node.handlers) > 1 or node.orelse:
+            raise UnsupportedConstructError("Multiple exception handlers and try/else are not supported")
         try_body = self._translate_body(node.body, warnings)
         catch_var = None
         catch_body = []

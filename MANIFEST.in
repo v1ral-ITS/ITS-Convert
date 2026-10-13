@@ -1,0 +1,3 @@
+include README.md LICENSE
+include examples/hello.py
+recursive-include examples/artifacts *.AppImage SHA256SUMS *.md

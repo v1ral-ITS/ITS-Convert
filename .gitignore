@@ -66,6 +66,15 @@ Thumbs.db
 # Node.js (for codepolisher-cli integration)
 node_modules/
 npm-debug.log*
+.audit-*/
+.audit-*
+.venv-linux/
+AUDIT-evidence.json
+audit_probe.py
+repair_*.py
+update_workflows.py
+finalize_docs.py
+!examples/artifacts/*.AppImage
 
 # Docker
 .docker/

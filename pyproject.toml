@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "itsconvert"
-version = "0.1.0"
-description = "Translate automation scripts across 27 languages via an intermediate representation"
+version = "1.0.1"
+description = "Translate automation scripts from 4 source languages to 26 targets and package with 10 adapters"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -50,6 +50,11 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["itsconvert*"]
+
+[tool.setuptools.data-files]
+"share/itsconvert/examples" = ["examples/hello.py"]
+"share/itsconvert/examples/artifacts" = ["examples/artifacts/hello-x86_64.AppImage", "examples/artifacts/SHA256SUMS", "examples/artifacts/README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

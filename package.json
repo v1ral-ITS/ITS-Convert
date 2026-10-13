@@ -1,7 +1,7 @@
 {
   "name": "itsconvert",
-  "version": "0.1.0",
-  "description": "Translate automation scripts across 27 languages through a language-neutral IR",
+  "version": "1.0.1",
+  "description": "Translate automation scripts from 4 source languages to 26 targets and package with 10 adapters",
   "license": "MIT",
   "author": "Bear Carrington <ITSolutions_MGNT@proton.me>",
   "homepage": "https://github.com/v1ral-ITS/ITS-Convert#readme",
@@ -15,7 +15,10 @@
   },
   "files": [
     "bin/",
-    "itsconvert/",
+    "itsconvert/**/*.py",
+    "examples/hello.py",
+    "examples/artifacts/",
+    "scripts/validate-npm-package.js",
     "README.md",
     "LICENSE",
     "pyproject.toml"

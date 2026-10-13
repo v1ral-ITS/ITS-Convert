@@ -29,6 +29,8 @@ class BriefcasePackager:
         Returns:
             Path to the created application bundle/directory
         """
+        source_file = source_file.resolve(strict=True)
+        output_dir = output_dir.resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -66,16 +68,16 @@ requires = []
 
         (project_dir / "pyproject.toml").write_text(pyproject_content)
 
-        src_dir = project_dir / "src"
-        src_dir.mkdir(exist_ok=True)
+        src_dir = project_dir / "src" / source_file.stem
+        src_dir.mkdir(parents=True, exist_ok=True)
         import shutil
-        shutil.copy2(source_file, src_dir / source_file.name)
+        shutil.copy2(source_file, src_dir / "__main__.py")
+        (src_dir / "__init__.py").write_text("", encoding="utf-8")
 
         cmd_create = [
             "briefcase",
             "create",
-            f"{source_file.stem}",
-            "-p", str(project_dir),
+
         ]
 
         result = subprocess.run(
@@ -96,6 +98,7 @@ requires = []
                 capture_output=True,
                 text=True,
                 check=False,
+                cwd=project_dir,
             )
             if result.returncode != 0:
                 raise PackagingError(
@@ -121,6 +124,9 @@ requires = []
                 f"Briefcase build failed: {result.stderr}\nstdout: {result.stdout}"
             )
 
+        package_result = subprocess.run(["briefcase", "package"], cwd=project_dir, capture_output=True, text=True, check=False)
+        if package_result.returncode:
+            raise PackagingError(package_result.stderr or package_result.stdout)
         dist_dir = project_dir / "dist"
         if dist_dir.exists():
             return dist_dir

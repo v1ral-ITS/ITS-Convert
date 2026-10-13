@@ -13,7 +13,7 @@ from itsconvert.ir import (
 
 class PyEmitter:
     def emit(self, ir: ScriptIR) -> str:
-        lines: list[str] = []
+        lines: list[str] = ["import os", "import sys", "import subprocess", "from pathlib import Path", ""]
         for node in ir.nodes:
             lines.extend(self._emit_node(node, indent=0))
         return "\n".join(lines) + "\n"
@@ -34,7 +34,7 @@ class PyEmitter:
                 return [f"{prefix}print({vals}, end={repr(node.end)})"]
             return [f"{prefix}print({vals})"]
         if isinstance(node, Input):
-            return [f'{prefix}{node.name} = input("{node.prompt}")']
+            return [f"{prefix}{node.name} = input({node.prompt!r})"]
         if isinstance(node, Command):
             cmd = f"{node.command} {self._emit_args(node.args)}".strip()
             if node.capture and node.name:
@@ -95,7 +95,7 @@ class PyEmitter:
             lines = [f"{prefix}try:"]
             lines.extend(self._emit_body(node.try_body, indent + 1))
             exc = f" as {node.catch_var}" if node.catch_var else ""
-            lines.append(f"{prefix}except{exc}:")
+            lines.append(f"{prefix}except Exception{exc}:")
             lines.extend(self._emit_body(node.catch_body, indent + 1))
             if node.finally_body:
                 lines.append(f"{prefix}finally:")
@@ -114,7 +114,7 @@ class PyEmitter:
             if node.op == "write" and node.content:
                 return [f"{prefix}Path({path}).write_text({self._val(node.content)})"]
             if node.op == "append" and node.content:
-                return [f"{prefix}Path({path}).write_text({self._val(node.content)}, append=True)"]
+                return [f"{prefix}with open({path}, 'a', encoding={node.encoding!r}) as _its_file:", f"{prefix}    _its_file.write({self._val(node.content)})"]
             if node.op == "exists":
                 name = node.name or "exists"
                 return [f"{prefix}{name} = Path({path}).exists()"]
@@ -199,22 +199,22 @@ class PyEmitter:
                 return "[" + ", ".join(self._val(p) for p in v.parts) + "]"
             return "[]"
         if v.kind == "dict":
-            return "{}"
+            return "{" + ", ".join(f"{self._val(pair.parts[0])}: {self._val(pair.parts[1])}" for pair in (v.parts or [])) + "}"
         if v.kind == "binop" and v.parts and len(v.parts) >= 3:
             left, op, right = v.parts
-            return f"{self._val(left)} {self._val_strip(op)} {self._val(right)}"
+            return f"({self._val(left)} {self._val_strip(op)} {self._val(right)})"
         if v.kind == "unaryop" and v.parts and len(v.parts) >= 2:
             op, operand = v.parts
             return f"{self._val_strip(op)} {self._val(operand)}"
         if v.kind == "call" and v.parts and len(v.parts) >= 2:
             func, args = v.parts
-            return f"{self._val(func)}({self._val(args)})"
+            return f"{func.value}({', '.join(self._val(arg) for arg in (args.parts or []))})"
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2:
             base, key = v.parts
             return f"{self._val(base)}[{self._val(key)}]"
         if v.kind == "attr" and v.parts and len(v.parts) >= 2:
             base, attr = v.parts
-            return f"{self._val(base)}.{self._val(attr)}"
+            return f"{self._val(base)}.{attr.value}"
         if v.kind == "fstring" and v.parts:
             parts = []
             for p in v.parts:
@@ -222,7 +222,7 @@ class PyEmitter:
                     parts.append(str(p.value))
                 else:
                     parts.append(f"{{{self._val(p)}}}")
-            return repr("".join(parts))
+            return "f" + repr("".join(parts))
         return repr(v.value)
 
     def _val_strip(self, v: Value) -> str:

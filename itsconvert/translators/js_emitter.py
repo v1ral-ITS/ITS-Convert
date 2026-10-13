@@ -20,7 +20,9 @@ class JSEmitter:
     def _emit_node(self, node: IRNode, indent: int) -> list[str]:
         p = "  " * indent
         if isinstance(node, Comment): return [f"{p}// {node.text}"]
-        if isinstance(node, Assign): return [f"{p}let {node.name} = {self._v(node.value)};"]
+        if isinstance(node, Assign):
+            declaration = "var " if node.name.isidentifier() else ""
+            return [f"{p}{declaration}{node.name} = {self._v(node.value)};"]
         if isinstance(node, MultiAssign): return [f"{p}let [{', '.join(node.names)}] = {self._v(node.value)};"]
         if isinstance(node, AugAssign): return [f"{p}{node.name} {node.op}= {self._v(node.value)};"]
         if isinstance(node, Print):
@@ -39,8 +41,8 @@ class JSEmitter:
         if isinstance(node, If): return self._if(node, indent)
         if isinstance(node, For): return [f"{p}for (let {node.var} of {self._v(node.iterable)}) {{"] + self._body(node.body, indent+1) + [f"{p}}}"]
         if isinstance(node, ForRange):
-            s = self._v(node.start); e = self._v(node.stop); st = f", {self._v(node.step)}" if node.step else ""
-            return [f"{p}for (let {node.var} = {s}; {node.var} < {e}; {node.var} += {st or '1'}) {{"] + self._body(node.body, indent+1) + [f"{p}}}"]
+            s = self._v(node.start); e = self._v(node.stop); st = self._v(node.step) if node.step else "1"
+            return [f"{p}if (({st}) === 0) throw new Error('range step cannot be zero');", f"{p}for (let {node.var} = {s}; (({st}) > 0 ? {node.var} < {e} : {node.var} > {e}); {node.var} += {st}) {{"] + self._body(node.body, indent+1) + [f"{p}}}"]
         if isinstance(node, ForEnumerate):
             return [f"{p}for (let [{node.index_var}, {node.value_var}] of {self._v(node.iterable)}.entries()) {{"] + self._body(node.body, indent+1) + [f"{p}}}"]
         if isinstance(node, ForKeys):
@@ -177,21 +179,25 @@ class JSEmitter:
             o, x = v.parts; os = self._vs(o)
             m = {"not": "!"}
             return f"({m.get(os, os)}{self._v(x)})"
-        if v.kind == "call" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}({self._v(v.parts[1])})"
+        if v.kind == "call" and v.parts and len(v.parts) >= 2:
+            name = str(v.parts[0].value)
+            args = v.parts[1].parts or []
+            if name == "len" and len(args) == 1: return f"({self._v(args[0])}).length"
+            return f"{name}({', '.join(self._v(arg) for arg in args)})"
         if v.kind == "subscript" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}[{self._v(v.parts[1])}]"
         if v.kind == "attr" and v.parts and len(v.parts) >= 2: return f"{self._v(v.parts[0])}.{self._vs(v.parts[1])}"
         if v.kind == "fstring" and v.parts:
             parts = [f"${{{self._v(p)}}}" if p.kind != "string" else str(p.value) for p in v.parts]
-            return repr("".join(parts))
+            return " + ".join(self._v(p) if p.kind == "string" else f"String({self._v(p)})" for p in v.parts) or "''"
         return repr(v.value)
 
     def _s(self, s: str) -> str: return repr(s)
     def _vs(self, v: Value) -> str: s = self._v(v); return s.strip("'\"") if s.startswith(("'",'"')) else s
 
     def _cond(self, c: Condition) -> str:
-        m = {"==": "===", "!=": "!===", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
+        m = {"==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<="}
         o = m.get(c.op, c.op)
-        if c.right.kind == "null": return f"{self._v(c.left)} === null"
+        if c.right.kind == "null": return f"{self._v(c.left)} {o} null"
         return f"{self._v(c.left)} {o} {self._v(c.right)}"
 
 def emit_js(ir: ScriptIR) -> str: return JSEmitter().emit(ir)
